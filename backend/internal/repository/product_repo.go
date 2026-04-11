@@ -110,6 +110,6 @@ func (r *ProductRepository) ReduceStock(id string, quantity int) error {
 func (r *ProductRepository) BulkUpsert(products []models.Product) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},
-		DoUpdates: clause.AssignmentColumns([]string{"price", "stock", "category_id", "brand_id", "unit", "discount", "description", "minimum_order_quantity", "quantity_discounts"}),
+		DoUpdates: clause.AssignmentColumns([]string{"price", "stock", "category_id", "brand_id", "unit", "discount", "description", "minimum_order_quantity", "quantity_discounts", "image_url", "secondary_image_url"}),
 	}).Create(&products).Error
 }

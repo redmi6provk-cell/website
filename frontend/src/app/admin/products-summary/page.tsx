@@ -303,13 +303,13 @@ export default function AdminProductsSummaryPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search by product, category, brand..."
-                className="h-12 w-full rounded-2xl border border-zinc-200 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
               />
             </div>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+              className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="all">All Categories</option>
               {categories.map((category) => (
@@ -321,7 +321,7 @@ export default function AdminProductsSummaryPage() {
             <select
               value={brandFilter}
               onChange={(e) => setBrandFilter(e.target.value)}
-              className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+              className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="all">All Brands</option>
               {brands.map((brand) => (
@@ -333,7 +333,7 @@ export default function AdminProductsSummaryPage() {
             <select
               value={stockFilter}
               onChange={(e) => setStockFilter(e.target.value as StockStatusFilter)}
-              className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+              className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="all">All Stock Status</option>
               <option value="in-stock">In Stock</option>

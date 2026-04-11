@@ -493,7 +493,7 @@ export default function AdminPurchasesPage() {
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                   />
                 </div>
                 <div>
@@ -502,7 +502,7 @@ export default function AdminPurchasesPage() {
                     value={form.invoice_number}
                     onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
                     placeholder="INV-2026-001"
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                   />
                 </div>
               </div>
@@ -514,7 +514,7 @@ export default function AdminPurchasesPage() {
                     <select
                       value={form.supplier_party_id}
                       onChange={(e) => handleSupplierSelect(e.target.value)}
-                      className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                     >
                       <option value="">Select Supplier</option>
                       {supplierOptions.map((supplier) => (
@@ -534,7 +534,7 @@ export default function AdminPurchasesPage() {
                   <select
                     value={form.payment_status}
                     onChange={(e) => setForm({ ...form, payment_status: e.target.value as PurchasePaymentStatus })}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                   >
                     <option value="paid">Paid</option>
                     <option value="partial">Partial</option>
@@ -546,7 +546,7 @@ export default function AdminPurchasesPage() {
                   <select
                     value={form.payment_method}
                     onChange={(e) => setForm({ ...form, payment_method: e.target.value as PurchasePaymentMethod })}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                   >
                     {paymentMethodOptions.map((option) => (
                       <option key={option} value={option}>{formatPaymentLabel(option)}</option>
@@ -561,7 +561,7 @@ export default function AdminPurchasesPage() {
                   <input
                     value={form.supplier_name}
                     onChange={(e) => setForm({ ...form, supplier_name: e.target.value })}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
                 <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
@@ -602,7 +602,7 @@ export default function AdminPurchasesPage() {
                           <select
                             value={item.product_id}
                             onChange={(e) => updateLine(item.id, "product_id", e.target.value)}
-                            className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                           >
                             <option value="">Select Product</option>
                             {products.map((product) => (
@@ -620,7 +620,7 @@ export default function AdminPurchasesPage() {
                             value={item.quantity}
                             onChange={(e) => updateLine(item.id, "quantity", e.target.value)}
                             placeholder="10"
-                            className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                           />
                         </div>
                         <div>
@@ -632,7 +632,7 @@ export default function AdminPurchasesPage() {
                             value={item.buy_price}
                             onChange={(e) => updateLine(item.id, "buy_price", e.target.value)}
                             placeholder="85"
-                            className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                           />
                         </div>
                         <div>
@@ -665,7 +665,7 @@ export default function AdminPurchasesPage() {
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   placeholder="Optional remarks for this purchase"
-                  className="w-full rounded-2xl border border-zinc-200 p-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -699,7 +699,7 @@ export default function AdminPurchasesPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search invoice, supplier, product..."
-                  className="h-12 w-full rounded-2xl border border-zinc-200 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                 />
               </div>
             </div>
@@ -708,7 +708,7 @@ export default function AdminPurchasesPage() {
               <select
                 value={supplierFilter}
                 onChange={(e) => setSupplierFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">All Suppliers</option>
                 {supplierOptions.map((supplier) => (
@@ -721,7 +721,7 @@ export default function AdminPurchasesPage() {
               <select
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">All Payment Status</option>
                 <option value="paid">Paid</option>
@@ -732,7 +732,7 @@ export default function AdminPurchasesPage() {
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>

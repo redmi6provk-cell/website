@@ -33,10 +33,10 @@ export default function Home() {
 
       <section className="bg-white py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10">
-          <div className="mb-10 flex items-end justify-between gap-4 border-b border-zinc-200 pb-6">
+          <div className="mb-8 flex flex-col gap-4 border-b border-zinc-200 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-400">Selected Picks</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-zinc-950">Featured products</h2>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-zinc-950 sm:text-3xl">Featured products</h2>
             </div>
             <Link href="/products" className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-950">
               View catalog

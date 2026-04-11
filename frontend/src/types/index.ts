@@ -40,6 +40,7 @@ export interface Product {
   stock: number;
   unit: string;
   image_url: string;
+  secondary_image_url?: string;
   created_at: string;
 }
 

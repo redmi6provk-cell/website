@@ -69,7 +69,7 @@ func (r *UserRepository) FindOrCreateByPhone(user *models.User) (*models.User, b
 	if err == nil {
 		return &existing, false, nil
 	}
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != gorm.ErrRecordNotFound {
 		return nil, false, err
 	}
 

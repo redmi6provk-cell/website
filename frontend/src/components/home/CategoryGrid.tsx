@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Category } from "@/types";
@@ -12,6 +12,9 @@ import {
 export default function CategoryGrid() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const railRef = useRef<HTMLDivElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragState = useRef({ startX: 0, scrollLeft: 0 });
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -26,6 +29,29 @@ export default function CategoryGrid() {
     };
     fetchCategories();
   }, []);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!railRef.current) return;
+    if (event.pointerType === "mouse") return;
+    setIsDragging(true);
+    dragState.current = {
+      startX: event.clientX,
+      scrollLeft: railRef.current.scrollLeft,
+    };
+    railRef.current.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !railRef.current) return;
+    const delta = event.clientX - dragState.current.startX;
+    railRef.current.scrollLeft = dragState.current.scrollLeft - delta;
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!railRef.current) return;
+    setIsDragging(false);
+    railRef.current.releasePointerCapture(event.pointerId);
+  };
 
   if (isLoading) {
     return (
@@ -50,12 +76,19 @@ export default function CategoryGrid() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div
+          ref={railRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          className={`flex gap-4 overflow-x-auto pb-4 select-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${isDragging ? "cursor-grabbing" : "cursor-auto touch-pan-x"}`}
+        >
           {categories.map((category) => (
             <Link 
               key={category.id}
               href={`/products?category=${category.id}`}
-              className="group rounded-[1.75rem] border border-zinc-200 bg-white p-5 transition-colors duration-200 hover:border-zinc-900"
+              className="group min-w-[190px] shrink-0 rounded-[1.75rem] border border-zinc-200 bg-white p-5 transition-colors duration-200 hover:border-zinc-900 sm:min-w-[200px]"
             >
               <div className="flex items-start justify-between gap-3">
                 <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-400">

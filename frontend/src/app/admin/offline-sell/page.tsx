@@ -407,7 +407,7 @@ export default function AdminOfflineSellPage() {
                 <div>
                   <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Party</label>
                   <div className="flex gap-2">
-                    <select value={selectedCustomerId} onChange={(e) => handleCustomerSelect(e.target.value)} className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">
+                    <select value={selectedCustomerId} onChange={(e) => handleCustomerSelect(e.target.value)} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
                       <option value="">Select customer</option>
                       {customers.map((customer) => (
                         <option key={customer.party_id} value={customer.party_id}>
@@ -421,18 +421,18 @@ export default function AdminOfflineSellPage() {
                     </Button>
                   </div>
                 </div>
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Phone</label><input value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} placeholder="Optional" className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Phone</label><input value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} placeholder="Optional" className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500" /></div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Name</label><input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value, })} className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label><input value={form.shop_name} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} placeholder="Optional" className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Name</label><input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value, })} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label><input value={form.shop_name} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} placeholder="Optional" className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500" /></div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Invoice Number</label><input value={form.bill_number} onChange={(e) => setForm({ ...form, bill_number: e.target.value })} className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 outline-none focus:ring-2 focus:ring-green-500" /></div>
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Sale Date</label><input type="date" value={form.sale_date} onChange={(e) => setForm({ ...form, sale_date: e.target.value })} className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
-                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Mode</label><select value={form.payment_mode} onChange={(e) => setForm({ ...form, payment_mode: e.target.value as PaymentMode })} className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">{paymentOptions.map((option) => <option key={option} value={option}>{formatPaymentLabel(option)}</option>)}</select></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Invoice Number</label><input value={form.bill_number} onChange={(e) => setForm({ ...form, bill_number: e.target.value })} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Sale Date</label><input type="date" value={form.sale_date} onChange={(e) => setForm({ ...form, sale_date: e.target.value })} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Mode</label><select value={form.payment_mode} onChange={(e) => setForm({ ...form, payment_mode: e.target.value as PaymentMode })} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">{paymentOptions.map((option) => <option key={option} value={option}>{formatPaymentLabel(option)}</option>)}</select></div>
               </div>
 
               <div className="rounded-[1.8rem] border border-zinc-100 bg-zinc-50/70 p-4 sm:p-5">
@@ -448,22 +448,22 @@ export default function AdminOfflineSellPage() {
                       <div key={line.id} className="grid grid-cols-1 gap-4 rounded-2xl border border-zinc-100 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_auto] xl:items-end">
                         <div className="flex h-full flex-col">
                           <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Product</label>
-                          <select value={line.product_id} onChange={(e) => selectProduct(line.id, e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500">
+                          <select value={line.product_id} onChange={(e) => selectProduct(line.id, e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Select Product</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                           <div className={`mt-2 min-h-[1rem] text-xs ${preview?.stockIssue ? "text-red-600" : "text-zinc-500"}`}>{preview?.product ? `Available stock: ${preview.product.stock}` : ""}</div>
                         </div>
                         <div className="flex h-full flex-col">
                           <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Qty</label>
-                          <input type="number" min="1" value={line.quantity} onChange={(e) => updateLine(line.id, "quantity", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                          <input type="number" min="1" value={line.quantity} onChange={(e) => updateLine(line.id, "quantity", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" />
                         </div>
                         <div className="flex h-full flex-col">
                           <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Sell Price</label>
-                          <input type="number" min="0" step="0.01" value={line.sell_price} onChange={(e) => updateLine(line.id, "sell_price", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                          <input type="number" min="0" step="0.01" value={line.sell_price} onChange={(e) => updateLine(line.id, "sell_price", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" />
                         </div>
                         <div className="flex h-full flex-col">
                           <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Discount</label>
-                          <input type="number" min="0" step="0.01" value={line.discount_value} onChange={(e) => updateLine(line.id, "discount_value", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                          <input type="number" min="0" step="0.01" value={line.discount_value} onChange={(e) => updateLine(line.id, "discount_value", e.target.value)} className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500" />
                         </div>
                         <div className="flex h-full flex-col">
                           <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Line Total</label>
@@ -478,11 +478,11 @@ export default function AdminOfflineSellPage() {
                 </div>
               </div>
 
-              <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Notes</label><textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional sale notes" className="w-full rounded-2xl border border-zinc-200 p-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
+              <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Notes</label><textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional sale notes" className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500" /></div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"><div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Summary</div><div className="mt-4 space-y-2 text-sm text-zinc-600"><div className="flex items-center justify-between"><span>Subtotal</span><span className="font-semibold text-zinc-900">{money(summary.subtotal)}</span></div><div className="flex items-center justify-between"><span>Discount Total</span><span className="font-semibold text-zinc-900">{money(summary.discountTotal)}</span></div><div className="flex items-center justify-between"><span>Final Total</span><span className="font-bold text-green-700">{money(summary.finalTotal)}</span></div></div></div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Amount Received</label><input type="number" min="0" step="0.01" value={form.amount_received} onChange={(e) => setForm({ ...form, amount_received: e.target.value })} placeholder="0" className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500" /><div className="mt-4 flex items-center justify-between text-sm"><span className="text-zinc-500">Balance / Due</span><span className={`font-bold ${summary.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>{money(summary.balanceDue)}</span></div></div>
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Amount Received</label><input type="number" min="0" step="0.01" value={form.amount_received} onChange={(e) => setForm({ ...form, amount_received: e.target.value })} placeholder="0" className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500" /><div className="mt-4 flex items-center justify-between text-sm"><span className="text-zinc-500">Balance / Due</span><span className={`font-bold ${summary.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>{money(summary.balanceDue)}</span></div></div>
               </div>
 
               {summary.stockIssue && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">Selected quantity kisi product ke available stock se zyada hai.</div>}

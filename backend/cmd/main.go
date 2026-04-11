@@ -18,6 +18,9 @@ func main() {
 	config.LoadEnv()
 	config.ConnectDB()
 	log.Println("Automatic database schema changes are disabled; skipping auto-migrate and cleanup")
+	if err := config.EnsureProductImageSchema(); err != nil {
+		log.Fatalf("Failed to align product image schema: %v", err)
+	}
 	if err := config.EnsureOrderInvoiceNumberSchema(); err != nil {
 		log.Fatalf("Failed to align order invoice number schema: %v", err)
 	}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronLeft, Landmark, Pencil, Search, Trash2, Wallet } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarDays, ChevronLeft, Landmark, Wallet } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
 import { Button } from "@/components/ui/Button";
@@ -95,16 +95,13 @@ function normalizeExpense(entry: ExpenseApiEntry): ExpenseEntry {
 
 export default function AdminExpensesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
 
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [form, setForm] = useState<ExpenseForm>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("all");
-  const [paymentFilter, setPaymentFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [paymentOptions, setPaymentOptions] = useState<string[]>(["cash"]);
   const [loading, setLoading] = useState(true);
 
@@ -152,30 +149,6 @@ export default function AdminExpensesPage() {
     [expenses]
   );
 
-  const filteredExpenses = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - 6);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    return expenses.filter((expense) => {
-      const expenseDate = new Date(expense.date);
-      const matchesSearch =
-        !query || expense.description.toLowerCase().includes(query) || expense.note.toLowerCase().includes(query);
-      const matchesPayment = paymentFilter === "all" || expense.paymentMethod === paymentFilter;
-      const matchesCategory = categoryFilter === "all" || expense.category === categoryFilter;
-      const matchesDate =
-        dateFilter === "all" ||
-        (dateFilter === "today" && expenseDate >= startOfToday) ||
-        (dateFilter === "week" && expenseDate >= startOfWeek) ||
-        (dateFilter === "month" && expenseDate >= startOfMonth);
-
-      return matchesSearch && matchesPayment && matchesCategory && matchesDate;
-    });
-  }, [expenses, search, paymentFilter, categoryFilter, dateFilter]);
-
   const summary = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -194,6 +167,7 @@ export default function AdminExpensesPage() {
     setEditingId(null);
     setFormError(null);
     setForm(emptyForm());
+    router.replace("/admin/expenses");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -250,7 +224,13 @@ export default function AdminExpensesPage() {
     }
   };
 
-  const handleEdit = (expense: ExpenseEntry) => {
+  useEffect(() => {
+    const editExpenseId = searchParams.get("edit");
+    if (!editExpenseId || expenses.length === 0) return;
+
+    const expense = expenses.find((entry) => entry.id === editExpenseId);
+    if (!expense) return;
+
     setEditingId(expense.id);
     setFormError(null);
     setForm({
@@ -261,23 +241,7 @@ export default function AdminExpensesPage() {
       amount: String(expense.amount),
       note: expense.note,
     });
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await api.delete(`/admin/expenses/${id}`);
-      const expensesRes = await api.get("/admin/expenses");
-      setExpenses((expensesRes.data.data || []).map(normalizeExpense));
-      if (editingId === id) {
-        resetForm();
-      }
-    } catch (error: unknown) {
-      const message =
-        (error as AxiosError<{ error?: string }>)?.response?.data?.error ||
-        "Failed to delete expense";
-      setFormError(message);
-    }
-  };
+  }, [expenses, searchParams]);
 
   if (!isInitialized || loading) {
     return <div className="p-12 text-center">Loading expenses page...</div>;
@@ -296,6 +260,9 @@ export default function AdminExpensesPage() {
               <p className="mt-1 text-sm text-zinc-500 md:mt-2 md:text-base">Daily kharcha track karo, filter karo, aur edit/delete bhi yahin se.</p>
             </div>
           </div>
+          <Button type="button" variant="outline" className="rounded-2xl px-5" onClick={() => router.push("/admin/expenses/list")}>
+            Open Expense List
+          </Button>
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -316,11 +283,11 @@ export default function AdminExpensesPage() {
           ))}
         </div>
 
-        <div className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="mx-auto max-w-3xl">
           <section className="rounded-[1.75rem] border border-zinc-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
             <div className="mb-5">
               <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">{editingId ? "Edit Expense" : "Expense Form"}</h2>
-              <p className="mt-1 text-sm text-zinc-500">Date, description, amount, payment method aur note fill karo.</p>
+              <p className="mt-1 text-sm text-zinc-500">Date, description, amount, payment method aur note fill karo. Expense history alag page par khulega.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -334,9 +301,11 @@ export default function AdminExpensesPage() {
                 <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Date</label>
                 <input
                   type="date"
+                  min="2000-01-01"
+                  max="2099-12-31"
                   value={form.date}
                   onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -347,7 +316,7 @@ export default function AdminExpensesPage() {
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="Kis cheez par kharcha hua"
-                  className="w-full rounded-2xl border border-zinc-200 p-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -356,7 +325,7 @@ export default function AdminExpensesPage() {
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                 >
                   <option value="">Select Category</option>
                   {categories.map((category) => (
@@ -377,7 +346,7 @@ export default function AdminExpensesPage() {
                     value={form.amount}
                     onChange={(e) => setForm({ ...form, amount: e.target.value })}
                     placeholder="Kitna kharcha hua"
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                   />
                 </div>
                 <div>
@@ -385,7 +354,7 @@ export default function AdminExpensesPage() {
                   <select
                     value={form.paymentMethod}
                     onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as ExpensePaymentMethod })}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                   >
                     {paymentOptions.map((option) => (
                       <option key={option} value={option}>{formatPaymentLabel(option)}</option>
@@ -401,7 +370,7 @@ export default function AdminExpensesPage() {
                   value={form.note}
                   onChange={(e) => setForm({ ...form, note: e.target.value })}
                   placeholder="Optional note"
-                  className="w-full rounded-2xl border border-zinc-200 p-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -416,150 +385,6 @@ export default function AdminExpensesPage() {
                 )}
               </div>
             </form>
-          </section>
-
-          <section className="rounded-[1.75rem] border border-zinc-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">Expense List</h2>
-                <p className="mt-1 text-sm text-zinc-500">Search aur filters ke saath table view.</p>
-              </div>
-              <div className="relative w-full lg:max-w-sm">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by description"
-                  className="h-12 w-full rounded-2xl border border-zinc-200 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-            </div>
-
-            <div className="mb-5 grid gap-4 md:grid-cols-3">
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="all">Filter by Date</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-              </select>
-
-              <select
-                value={paymentFilter}
-                onChange={(e) => setPaymentFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="all">Filter by Payment</option>
-                {paymentOptions.map((option) => (
-                  <option key={option} value={option}>{formatPaymentLabel(option)}</option>
-                ))}
-              </select>
-
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="all">Filter by Category</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-4 md:hidden">
-              {filteredExpenses.map((expense) => (
-                <div key={expense.id} className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">{formatDate(expense.date)}</div>
-                      <div className="mt-2 text-base font-bold text-zinc-900">{expense.description}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-black text-zinc-900">{formatCurrency(expense.amount)}</div>
-                      <div className="mt-1 text-xs capitalize text-zinc-500">{expense.paymentMethod}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-3 rounded-2xl bg-white p-3">
-                    <div>
-                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">Category</div>
-                      <div className="mt-1 text-sm font-medium text-zinc-700">{expense.category}</div>
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">Note</div>
-                      <div className="mt-1 text-sm text-zinc-600">{expense.note || "-"}</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(expense)} className="flex-1 rounded-xl">
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(expense.id)} className="flex-1 rounded-xl text-red-500 hover:bg-red-50">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {filteredExpenses.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-zinc-200 px-4 py-10 text-center text-sm text-zinc-500">
-                  Expense entries abhi nahi hain. Left side form se pehla expense add kar sakte ho.
-                </div>
-              )}
-            </div>
-
-            <div className="hidden overflow-x-auto md:block">
-              <table className="min-w-full text-left">
-                <thead className="bg-zinc-50/70">
-                  <tr>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Date</th>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Description</th>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Category</th>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Payment Method</th>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Amount</th>
-                    <th className="px-4 py-4 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Note</th>
-                    <th className="px-4 py-4 text-right text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {filteredExpenses.map((expense) => (
-                    <tr key={expense.id}>
-                      <td className="px-4 py-4 text-sm text-zinc-700">{formatDate(expense.date)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-zinc-900">{expense.description}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-700">{expense.category}</td>
-                      <td className="px-4 py-4 text-sm capitalize text-zinc-700">{expense.paymentMethod}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-zinc-900">{formatCurrency(expense.amount)}</td>
-                      <td className="max-w-[240px] px-4 py-4 text-sm text-zinc-600">
-                        <div className="line-clamp-2">{expense.note || "-"}</div>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(expense)} className="h-10 w-10 rounded-xl border border-zinc-100 p-0">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(expense.id)} className="h-10 w-10 rounded-xl border border-zinc-100 p-0 text-red-500 hover:bg-red-50">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredExpenses.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center text-sm text-zinc-500">
-                        Expense entries abhi nahi hain. Left side form se pehla expense add kar sakte ho.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
           </section>
         </div>
       </div>

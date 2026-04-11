@@ -7,9 +7,10 @@ import { Product } from "@/types";
 import api from "@/lib/api";
 import { useCartStore } from "@/store/cartStore";
 import { Button } from "@/components/ui/Button";
-import { ShoppingCart, ChevronLeft } from "lucide-react";
+import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDiscountLabel, getMinimumOrderQuantity, getProductPricing, getSortedDiscounts } from "@/lib/pricing";
-import { resolveAssetUrl, shouldBypassImageOptimization } from "@/lib/images";
+import { shouldBypassImageOptimization } from "@/lib/images";
+import { getProductImageUrls } from "@/lib/productImages";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
 
 export default function ProductDetailPage() {
@@ -20,6 +21,7 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [cartError, setCartError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -27,6 +29,8 @@ export default function ProductDetailPage() {
         const response = await api.get(`/products/${id}`);
         const fetchedProduct: Product = response.data.data;
         setProduct(fetchedProduct);
+        const { primaryImage } = getProductImageUrls(fetchedProduct);
+        setSelectedImage(primaryImage);
         const minimumQuantity = getMinimumOrderQuantity(fetchedProduct);
         setQuantity(Math.min(fetchedProduct.stock, minimumQuantity));
       } catch (error) {
@@ -45,6 +49,33 @@ export default function ProductDetailPage() {
     }
     return getProductPricing(product, quantity);
   }, [product, quantity]);
+
+  const galleryImages = product ? getProductImageUrls(product).galleryImages : [];
+  const imageSrc = selectedImage || galleryImages[0] || "";
+  const activeImageIndex =
+    imageSrc === ""
+      ? 0
+      : Math.max(
+          0,
+          galleryImages.findIndex((galleryImage) => galleryImage === imageSrc)
+        );
+
+  useEffect(() => {
+    if (galleryImages.length <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSelectedImage((currentImage) => {
+        const currentIndex = galleryImages.findIndex((galleryImage) => galleryImage === currentImage);
+        const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+        const nextIndex = (safeIndex + 1) % galleryImages.length;
+        return galleryImages[nextIndex];
+      });
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [galleryImages]);
 
   if (loading) {
     return (
@@ -76,9 +107,24 @@ export default function ProductDetailPage() {
   const minimumOrderQuantity = getMinimumOrderQuantity(product);
   const slabs = getSortedDiscounts(product);
   const canMeetMinimumStock = product.stock >= minimumOrderQuantity;
-  const imageSrc = resolveAssetUrl(
-    product.image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800"
-  );
+
+  const showPreviousImage = () => {
+    if (galleryImages.length <= 1) {
+      return;
+    }
+
+    const nextIndex = (activeImageIndex - 1 + galleryImages.length) % galleryImages.length;
+    setSelectedImage(galleryImages[nextIndex]);
+  };
+
+  const showNextImage = () => {
+    if (galleryImages.length <= 1) {
+      return;
+    }
+
+    const nextIndex = (activeImageIndex + 1) % galleryImages.length;
+    setSelectedImage(galleryImages[nextIndex]);
+  };
 
   const handleAddToCart = () => {
     if (!canMeetMinimumStock) {
@@ -112,17 +158,77 @@ export default function ProductDetailPage() {
         </Button>
 
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-start">
-          <div className="relative aspect-square overflow-hidden rounded-3xl border border-zinc-100 bg-zinc-50">
-            <Image
-              src={imageSrc}
-              alt={product.name}
-              fill
-              unoptimized={shouldBypassImageOptimization(imageSrc)}
-              className="object-contain p-8"
-            />
-            {pricing.lineDiscount > 0 && (
-              <div className="absolute left-6 top-6 rounded-full bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg">
-                Bulk savings active
+          <div>
+            <div className="relative aspect-square overflow-hidden rounded-3xl border border-zinc-100 bg-zinc-50">
+              <Image
+                src={imageSrc}
+                alt={product.name}
+                fill
+                unoptimized={shouldBypassImageOptimization(imageSrc)}
+                className="object-contain p-8"
+              />
+              {galleryImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={showPreviousImage}
+                    className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/92 text-zinc-900 shadow-lg transition hover:bg-white"
+                    aria-label="Show previous product image"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showNextImage}
+                    className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/92 text-zinc-900 shadow-lg transition hover:bg-white"
+                    aria-label="Show next product image"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+              {pricing.lineDiscount > 0 && (
+                <div className="absolute left-6 top-6 rounded-full bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg">
+                  Bulk savings active
+                </div>
+              )}
+              {galleryImages.length > 1 && (
+                <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 shadow-sm">
+                  {galleryImages.map((galleryImage, index) => (
+                    <button
+                      key={`${galleryImage}-dot-${index}`}
+                      type="button"
+                      onClick={() => setSelectedImage(galleryImage)}
+                      className={`h-2.5 w-2.5 rounded-full transition ${
+                        activeImageIndex === index ? "bg-zinc-900" : "bg-zinc-300"
+                      }`}
+                      aria-label={`Show product image ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {galleryImages.length > 1 && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {galleryImages.map((galleryImage, index) => (
+                  <button
+                    key={`${galleryImage}-${index}`}
+                    type="button"
+                    onClick={() => setSelectedImage(galleryImage)}
+                    className={`relative aspect-square overflow-hidden rounded-2xl border bg-zinc-50 transition ${
+                      imageSrc === galleryImage ? "border-green-500 ring-2 ring-green-100" : "border-zinc-100"
+                    }`}
+                  >
+                    <Image
+                      src={galleryImage}
+                      alt={`${product.name} image ${index + 1}`}
+                      fill
+                      unoptimized={shouldBypassImageOptimization(galleryImage)}
+                      className="object-contain p-3"
+                    />
+                  </button>
+                ))}
               </div>
             )}
           </div>

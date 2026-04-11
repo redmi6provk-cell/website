@@ -43,6 +43,7 @@ interface Product {
   category_info?: Category;
   brand_info?: Brand;
   image_url: string;
+  secondary_image_url?: string;
 }
 
 function formatPrice(price: number) {
@@ -67,6 +68,7 @@ interface ProductDraft {
   category_id: string;
   brand_id: string;
   image_url: string;
+  secondary_image_url: string;
   minimum_order_quantity: string;
   quantity_discounts: Array<{
     min_quantity: string;
@@ -84,6 +86,7 @@ const emptyDraft = (): ProductDraft => ({
   category_id: "",
   brand_id: "",
   image_url: "",
+  secondary_image_url: "",
   minimum_order_quantity: "1",
   quantity_discounts: [
     {
@@ -234,6 +237,7 @@ export default function AdminProductsPage() {
       category_id: product.category_id || "",
       brand_id: product.brand_id || "",
       image_url: product.image_url || "",
+      secondary_image_url: product.secondary_image_url || "",
       minimum_order_quantity: String(product.minimum_order_quantity || 1),
       quantity_discounts:
         product.quantity_discounts && product.quantity_discounts.length > 0
@@ -306,11 +310,20 @@ export default function AdminProductsPage() {
               {filteredProducts.map((p) => (
                 <article key={p.id} className="rounded-[1.6rem] border border-zinc-100 bg-zinc-50/70 p-4 shadow-sm">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-100">
+                    <div className="flex h-14 w-24 shrink-0 gap-2">
                       {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-zinc-100">
+                          <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                        </div>
                       ) : (
-                        <ImageIcon className="h-5 w-5 text-zinc-300" />
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-zinc-100">
+                          <ImageIcon className="h-5 w-5 text-zinc-300" />
+                        </div>
+                      )}
+                      {p.secondary_image_url && (
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-zinc-100">
+                          <img src={p.secondary_image_url} alt={`${p.name} alternate`} className="h-full w-full object-cover" />
+                        </div>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -395,11 +408,20 @@ export default function AdminProductsPage() {
                   <tr key={p.id} className="group transition-colors hover:bg-zinc-50/50">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-zinc-100">
+                        <div className="flex items-center gap-2">
                           {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-zinc-100">
+                              <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                            </div>
                           ) : (
-                            <ImageIcon className="h-5 w-5 text-zinc-300" />
+                            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-zinc-100">
+                              <ImageIcon className="h-5 w-5 text-zinc-300" />
+                            </div>
+                          )}
+                          {p.secondary_image_url && (
+                            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-zinc-100">
+                              <img src={p.secondary_image_url} alt={`${p.name} alternate`} className="h-full w-full object-cover" />
+                            </div>
                           )}
                         </div>
                         <div>
@@ -502,7 +524,7 @@ export default function AdminProductsPage() {
                 required
                 value={newProduct.category_id}
                 onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
-                className="h-14 w-full rounded-2xl border border-zinc-100 px-4 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-green-500"
+                className="h-14 w-full rounded-2xl border border-zinc-100 bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-all focus:ring-2 focus:ring-green-500"
               >
                 <option value="">Select Category</option>
                 {categories.map((c) => (
@@ -519,7 +541,7 @@ export default function AdminProductsPage() {
                 required
                 value={newProduct.brand_id}
                 onChange={(e) => setNewProduct({ ...newProduct, brand_id: e.target.value })}
-                className="h-14 w-full rounded-2xl border border-zinc-100 px-4 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-green-500"
+                className="h-14 w-full rounded-2xl border border-zinc-100 bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-all focus:ring-2 focus:ring-green-500"
               >
                 <option value="">Select Brand</option>
                 {brands.map((b) => (
@@ -571,7 +593,7 @@ export default function AdminProductsPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-black uppercase tracking-widest text-zinc-400">Image URL</label>
+              <label className="mb-2 block text-xs font-black uppercase tracking-widest text-zinc-400">Primary Image URL</label>
               <Input
                 value={newProduct.image_url}
                 onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
@@ -582,6 +604,23 @@ export default function AdminProductsPage() {
                 <ImageUploader
                   value={newProduct.image_url}
                   onUploaded={(url) => setNewProduct({ ...newProduct, image_url: url })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-black uppercase tracking-widest text-zinc-400">Second Image URL</label>
+              <Input
+                value={newProduct.secondary_image_url}
+                onChange={(e) => setNewProduct({ ...newProduct, secondary_image_url: e.target.value })}
+                placeholder="https://images.unsplash.com/..."
+                className="h-14 rounded-2xl"
+              />
+              <div className="mt-3">
+                <ImageUploader
+                  value={newProduct.secondary_image_url}
+                  onUploaded={(url) => setNewProduct({ ...newProduct, secondary_image_url: url })}
+                  label="Upload second image"
                 />
               </div>
             </div>

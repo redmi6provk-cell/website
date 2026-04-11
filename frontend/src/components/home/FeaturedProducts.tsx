@@ -28,7 +28,7 @@ export default function FeaturedProducts() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="aspect-square animate-pulse rounded-2xl bg-zinc-100"></div>
         ))}
@@ -45,7 +45,7 @@ export default function FeaturedProducts() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
       {products.map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}

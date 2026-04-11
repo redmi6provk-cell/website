@@ -6,13 +6,13 @@ import { Plus } from "lucide-react";
 import { Product } from "@/types";
 import { useCartStore } from "@/store/cartStore";
 import {
-  formatDiscountLabel,
   getMaximumProductDiscountPercent,
   getMinimumOrderQuantity,
   getProductPricing,
   getSortedDiscounts,
 } from "@/lib/pricing";
-import { resolveAssetUrl, shouldBypassImageOptimization } from "@/lib/images";
+import { shouldBypassImageOptimization } from "@/lib/images";
+import { getProductImageUrls } from "@/lib/productImages";
 import { Button } from "../ui/Button";
 
 interface ProductCardProps {
@@ -27,25 +27,49 @@ export default function ProductCard({ product }: ProductCardProps) {
   const maxDiscountPercent = getMaximumProductDiscountPercent(product);
   const categoryLabel = product.category_info?.name || "Daily essentials";
   const canAddToCart = product.stock >= minimumOrderQuantity;
-  const imageSrc = resolveAssetUrl(
-    product.image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400"
-  );
+  const { primaryImage, secondaryImage } = getProductImageUrls(product);
 
   return (
     <div className="group relative flex h-full flex-col overflow-hidden rounded-[28px] border border-zinc-100 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-green-100 hover:shadow-[0_22px_55px_-24px_rgba(22,163,74,0.35)]">
       <Link href={`/products/${product.id}`} className="relative aspect-[16/9] overflow-hidden bg-zinc-100 sm:aspect-[4/3] lg:aspect-square">
         <Image
-          src={imageSrc}
+          src={primaryImage}
           alt={product.name}
           fill
-          unoptimized={shouldBypassImageOptimization(imageSrc)}
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
+          unoptimized={shouldBypassImageOptimization(primaryImage)}
+          className={`object-cover transition-all duration-300 group-hover:scale-105 ${secondaryImage ? "group-hover:opacity-0" : ""}`}
         />
+        {secondaryImage && (
+          <Image
+            src={secondaryImage}
+            alt={`${product.name} alternate view`}
+            fill
+            unoptimized={shouldBypassImageOptimization(secondaryImage)}
+            className="object-cover opacity-0 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100"
+          />
+        )}
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/20 to-transparent" />
         {maxDiscountPercent > 0 && (
           <div className="absolute left-3 top-3 rounded-full bg-red-600 px-2 py-1 text-xs font-bold text-white shadow-sm">
             Save up to {maxDiscountPercent}%
           </div>
+        )}
+        {secondaryImage && (
+          <>
+            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-white/92 px-2.5 py-1 shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-zinc-900" />
+              <span className="h-2 w-2 rounded-full bg-zinc-300" />
+            </div>
+            <div className="absolute bottom-3 right-3 h-14 w-14 overflow-hidden rounded-2xl border-2 border-white bg-white/95 shadow-lg">
+              <Image
+                src={secondaryImage}
+                alt={`${product.name} preview`}
+                fill
+                unoptimized={shouldBypassImageOptimization(secondaryImage)}
+                className="object-cover"
+              />
+            </div>
+          </>
         )}
       </Link>
 
@@ -72,22 +96,43 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {slabs.length > 0 && (
-          <details className="mb-3 rounded-2xl border border-green-100 bg-green-50/70 p-2.5 sm:mb-4 sm:p-3">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-green-700 sm:gap-3 sm:text-xs sm:tracking-[0.24em]">
-              <span>Bulk Price Slabs</span>
-              <span className="rounded-full bg-white px-2 py-1 text-[10px] tracking-[0.14em] text-zinc-600">
-                View All
-              </span>
-            </summary>
-            <div className="mt-3 space-y-2">
-              {slabs.map((slab, index) => (
-                <div
-                  key={`${slab.min_quantity}-${slab.max_quantity ?? "plus"}-${index}`}
-                  className="rounded-xl bg-white/80 px-3 py-2 text-xs font-medium text-zinc-700"
-                >
-                  {formatDiscountLabel(slab)}
+          <details className="mb-3 overflow-hidden rounded-[22px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(236,253,245,0.95),rgba(255,255,255,1))] shadow-[0_10px_30px_-24px_rgba(5,150,105,0.55)] sm:mb-4">
+            <summary className="flex cursor-pointer list-none flex-col items-start gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">
+                  Bulk savings
                 </div>
-              ))}
+                <div className="mt-1 text-xs font-medium text-zinc-600">
+                  Buy more, pay less
+                </div>
+              </div>
+              <div className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-700">
+                {slabs.length > 2 ? `View ${slabs.length}` : "View"}
+              </div>
+            </summary>
+            <div className="border-t border-emerald-100/80 px-3 pb-3 pt-2">
+              <div className="space-y-2">
+                {slabs.slice(0, 3).map((slab, index) => (
+                  <div
+                    key={`${slab.min_quantity}-${slab.max_quantity ?? "plus"}-${index}`}
+                    className="flex flex-col items-start gap-1 rounded-2xl bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  >
+                    <div className="text-xs font-semibold text-zinc-800">
+                      {slab.max_quantity ? `${slab.min_quantity}-${slab.max_quantity} pcs` : `${slab.min_quantity}+ pcs`}
+                    </div>
+                    <div className="text-right text-xs font-bold text-emerald-700">
+                      {slab.discount_type === "PERCENT"
+                        ? `${Number(slab.discount_value || 0)}% off`
+                        : `Rs. ${Number(slab.discount_value || 0)} off`}
+                    </div>
+                  </div>
+                ))}
+                {slabs.length > 3 && (
+                  <div className="px-1 pt-1 text-[11px] font-medium text-zinc-500">
+                    +{slabs.length - 3} more bulk tiers
+                  </div>
+                )}
+              </div>
             </div>
           </details>
         )}

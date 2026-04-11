@@ -53,6 +53,7 @@ type Product struct {
 	Stock                int                `json:"stock"`
 	Unit                 string             `json:"unit"`
 	ImageURL             string             `json:"image_url"`
+	SecondaryImageURL    string             `json:"secondary_image_url"`
 	CreatedAt            time.Time          `json:"created_at"`
 }
 

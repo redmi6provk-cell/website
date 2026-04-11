@@ -593,27 +593,27 @@ export default function AdminOrdersPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search by order ID, customer, phone..."
-                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-green-500"
+                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
               />
             </div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Status</option>
               {ORDER_STATUSES.map((status) => (
                 <option key={status} value={status}>{formatStatusLabel(status)}</option>
               ))}
             </select>
-            <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">
+            <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Time</option>
               <option value="today">Today</option>
               <option value="week">This Week</option>
               <option value="month">This Month</option>
             </select>
-            <select value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">
+            <select value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Delivery Types</option>
               <option value="delivery">Home Delivery</option>
               <option value="pickup">Store Pickup</option>
             </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500">
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500">
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
               <option value="highest">Highest Amount</option>
@@ -839,11 +839,11 @@ export default function AdminOrdersPage() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Name</label>
-                      <input value={getCustomerName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none" />
+                      <input value={getCustomerName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
                     </div>
                     <div>
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Phone</label>
-                      <input value={getCustomerPhone(selectedOrder) || ""} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none" />
+                      <input value={getCustomerPhone(selectedOrder) || ""} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
                     </div>
                   </div>
 
@@ -853,20 +853,20 @@ export default function AdminOrdersPage() {
                       <input
                         value={invoiceNumber}
                         onChange={(e) => setInvoiceNumber(e.target.value)}
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 outline-none focus:ring-2 focus:ring-green-500"
+                        className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
                     <div>
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label>
-                      <input value={getShopName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none" />
+                      <input value={getShopName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
                     </div>
                     <div>
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Delivery Type</label>
-                      <input value={getDeliveryType(selectedOrder) === "pickup" ? "Store Pickup" : "Home Delivery"} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none" />
+                      <input value={getDeliveryType(selectedOrder) === "pickup" ? "Store Pickup" : "Home Delivery"} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
                     </div>
                     <div>
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Status</label>
-                      <input value={formatStatusLabel(getPaymentStatus(selectedOrder))} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none" />
+                      <input value={formatStatusLabel(getPaymentStatus(selectedOrder))} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
                     </div>
                   </div>
 
@@ -874,7 +874,7 @@ export default function AdminOrdersPage() {
                     <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
                       {getDeliveryType(selectedOrder) === "pickup" ? "Pickup Label" : "Address"}
                     </label>
-                    <textarea value={selectedOrder.address} readOnly rows={3} className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm outline-none" />
+                    <textarea value={selectedOrder.address} readOnly rows={3} className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-900 outline-none" />
                   </div>
 
                   <div className="rounded-[1.8rem] border border-zinc-100 bg-zinc-50/70 p-4 sm:p-5">
@@ -945,7 +945,7 @@ export default function AdminOrdersPage() {
                         value={confirmNote}
                         onChange={(e) => setConfirmNote(e.target.value)}
                         placeholder="Optional order confirmation note"
-                        className="w-full rounded-2xl border border-zinc-200 p-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                       />
                       {getPaymentMode(selectedOrder) === "cod" && (
                         <div className="mt-4">
@@ -953,7 +953,7 @@ export default function AdminOrdersPage() {
                           <select
                             value={codCollectionMethod}
                             onChange={(e) => setCodCollectionMethod(e.target.value)}
-                            className="h-12 w-full rounded-2xl border border-zinc-200 px-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+                            className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
                           >
                             {codCollectionOptions.map((option) => (
                               <option key={option} value={option}>
