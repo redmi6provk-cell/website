@@ -140,7 +140,7 @@ export default function AdminOfflineSellPage() {
     if (isInitialized && (!isAuthenticated || (user && !canAccessAdmin(user.role)))) router.push("/");
     const load = async () => {
       try {
-        const [pRes, sRes, ordersRes, settingsRes, partiesRes] = await Promise.all([api.get("/products"), api.get("/admin/offline-sales"), api.get("/admin/orders"), api.get("/admin/settings"), api.get("/admin/arp/parties")]);
+        const [pRes, sRes, ordersRes, settingsRes, partiesRes] = await Promise.all([api.get("/admin/products"), api.get("/admin/offline-sales"), api.get("/admin/orders"), api.get("/admin/settings"), api.get("/admin/arp/parties")]);
         setProducts(pRes.data.data?.items || []);
         setSales((sRes.data.data || []).map(normalizeSale));
         setConfirmedOrders((ordersRes.data.data || []).filter((order: Order) => order.status === "confirmed"));

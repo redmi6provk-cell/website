@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -25,9 +25,21 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setAuth } = useAuthStore();
+  const { setAuth, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (!isInitialized || !isAuthenticated) {
+      return;
+    }
+
+    router.replace(searchParams.get("redirect") || "/");
+  }, [isAuthenticated, isInitialized, router, searchParams]);
 
   const {
     register,
@@ -37,13 +49,17 @@ function LoginPageContent() {
     resolver: zodResolver(loginSchema),
   });
 
+  if (isInitialized && isAuthenticated) {
+    return null;
+  }
+
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await api.post("/auth/login", { phone: data.phone });
       const { user, token } = response.data.data;
-      setAuth(user, token);
+      await setAuth(user, token);
       router.push(searchParams.get("redirect") || "/");
     } catch (err: unknown) {
       const errorResponse = err as AxiosError<{ error?: string }>;

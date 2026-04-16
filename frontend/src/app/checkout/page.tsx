@@ -400,7 +400,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 py-12">
-      <div className="container mx-auto px-4 pb-32 sm:px-6 lg:px-8 lg:pb-8">
+      <div className="container mx-auto px-4 pb-52 sm:px-6 lg:px-8 lg:pb-8">
         <div className="mb-8 flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.back()} leftIcon={ChevronLeft}>
             Back
@@ -719,7 +719,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
+      <div className="fixed inset-x-0 bottom-24 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
         <div className="mx-auto max-w-lg">
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>

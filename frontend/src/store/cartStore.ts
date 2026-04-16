@@ -28,6 +28,9 @@ interface CartState {
   clearCartNotice: () => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
+  getOwnerItems: (ownerId: string | null) => CartItem[];
+  setOwnerItems: (ownerId: string | null, items: CartItem[]) => void;
+  clearOwnerItems: (ownerId: string | null) => void;
 }
 
 export const useCartStore = create<CartState>()(
@@ -140,6 +143,33 @@ export const useCartStore = create<CartState>()(
 
       getTotalPrice: () => {
         return getCartPricing(get().items).subtotal;
+      },
+
+      getOwnerItems: (ownerId) => {
+        const key = ownerId || GUEST_CART_KEY;
+        return get().cartsByOwner[key] || [];
+      },
+
+      setOwnerItems: (ownerId, items) => {
+        const key = ownerId || GUEST_CART_KEY;
+        set((state) => ({
+          items: state.activeCartOwner === key ? items : state.items,
+          cartsByOwner: {
+            ...state.cartsByOwner,
+            [key]: items,
+          },
+        }));
+      },
+
+      clearOwnerItems: (ownerId) => {
+        const key = ownerId || GUEST_CART_KEY;
+        set((state) => ({
+          items: state.activeCartOwner === key ? [] : state.items,
+          cartsByOwner: {
+            ...state.cartsByOwner,
+            [key]: [],
+          },
+        }));
       },
     }),
     {

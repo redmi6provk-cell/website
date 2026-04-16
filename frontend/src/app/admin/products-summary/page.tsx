@@ -78,7 +78,7 @@ export default function AdminProductsSummaryPage() {
     const fetchProducts = async () => {
       try {
         const [productResponse, purchaseResponse] = await Promise.all([
-          api.get("/products"),
+          api.get("/admin/products"),
           api.get("/admin/purchases"),
         ]);
         setProducts(productResponse.data.data?.items || []);

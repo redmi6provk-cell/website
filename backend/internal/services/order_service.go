@@ -63,6 +63,9 @@ func (s *OrderService) CreateOrder(userID uuid.UUID, input CreateOrderInput) (*m
 	var orderItems []models.OrderItem
 
 	for _, item := range cartItems {
+		if !item.Product.IsActive {
+			return nil, fmt.Errorf("%s is no longer available for sale", item.Product.Name)
+		}
 		pricing := item.Product.PricingForQuantity(item.Quantity)
 		if !pricing.MeetsMinimum {
 			return nil, fmt.Errorf("%s requires minimum %d quantity", item.Product.Name, item.Product.MinimumOrderQuantity)

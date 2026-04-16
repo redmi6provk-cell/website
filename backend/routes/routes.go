@@ -83,8 +83,10 @@ func SetupRoutes(
 		adminProducts := admin.Group("/products")
 		adminProducts.Use(middleware.RequireRoles(models.RoleAdmin, models.RoleSuperAdmin))
 		{
+			adminProducts.GET("", productHandler.GetAdminProducts)
 			adminProducts.POST("", productHandler.CreateProduct)
 			adminProducts.PUT("/:id", productHandler.UpdateProduct)
+			adminProducts.PUT("/:id/active", productHandler.UpdateProductActive)
 			adminProducts.DELETE("/:id", productHandler.DeleteProduct)
 			adminProducts.PUT("/:id/stock", productHandler.UpdateStock)
 			adminProducts.POST("/csv", productHandler.BulkUploadCSV)

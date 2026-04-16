@@ -21,6 +21,9 @@ func main() {
 	if err := config.EnsureProductImageSchema(); err != nil {
 		log.Fatalf("Failed to align product image schema: %v", err)
 	}
+	if err := config.EnsureProductActiveSchema(); err != nil {
+		log.Fatalf("Failed to align product active schema: %v", err)
+	}
 	if err := config.EnsureOrderInvoiceNumberSchema(); err != nil {
 		log.Fatalf("Failed to align order invoice number schema: %v", err)
 	}

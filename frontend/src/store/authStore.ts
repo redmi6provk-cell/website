@@ -1,17 +1,75 @@
 import { create } from "zustand";
 import Cookies from "js-cookie";
-import { User } from "@/types";
+import { CartItem, Product, User } from "@/types";
 import { useCartStore } from "@/store/cartStore";
+import api from "@/lib/api";
 
 interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isInitialized: boolean;
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User, token: string) => Promise<void>;
   updateUser: (user: User) => void;
   logout: () => void;
   checkAuth: () => void;
+}
+
+type ServerCartItem = {
+  product: Product;
+  quantity: number;
+};
+
+async function syncCartAfterAuth(userId: string) {
+  const cartStore = useCartStore.getState();
+  const guestItems = cartStore.getOwnerItems(null);
+  const localUserItems = cartStore.getOwnerItems(userId);
+
+  let serverItems: CartItem[] = localUserItems;
+  try {
+    const response = await api.get("/cart");
+    const serverCart = Array.isArray(response.data?.data) ? (response.data.data as ServerCartItem[]) : [];
+    serverItems = serverCart
+      .filter((item) => item?.product?.id)
+      .map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+      }));
+  } catch (error) {
+    console.error("Failed to fetch server cart after auth", error);
+  }
+
+  const mergedByProduct = new Map<string, CartItem>();
+
+  for (const item of [...serverItems, ...guestItems]) {
+    const existing = mergedByProduct.get(item.product.id);
+    const nextQuantity = Math.max(0, Math.min(item.product.stock, (existing?.quantity || 0) + item.quantity));
+    if (nextQuantity <= 0) {
+      mergedByProduct.delete(item.product.id);
+      continue;
+    }
+
+    mergedByProduct.set(item.product.id, {
+      product: item.product,
+      quantity: nextQuantity,
+    });
+  }
+
+  const mergedItems = Array.from(mergedByProduct.values());
+  cartStore.setOwnerItems(userId, mergedItems);
+  cartStore.clearOwnerItems(null);
+  cartStore.setCartOwner(userId);
+
+  try {
+    await api.post("/cart/sync", {
+      items: mergedItems.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+      })),
+    });
+  } catch (error) {
+    console.error("Failed to sync merged cart after auth", error);
+  }
 }
 
 function getCookieDomain() {
@@ -50,14 +108,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isInitialized: false,
 
-  setAuth: (user, token) => {
+  setAuth: async (user, token) => {
     persistToken(token);
     localStorage.setItem("user", JSON.stringify(user));
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("admin-panel-unlocked");
     }
-    useCartStore.getState().setCartOwner(user.id);
     set({ user, token, isAuthenticated: true, isInitialized: true });
+    await syncCartAfterAuth(user.id);
   },
 
   updateUser: (user) => {
@@ -91,10 +149,16 @@ export const useAuthStore = create<AuthState>((set) => ({
             isAuthenticated: true,
             isInitialized: true,
           });
+          if (useCartStore.getState().getOwnerItems(parsedUser.id).length === 0) {
+            void syncCartAfterAuth(parsedUser.id);
+          }
         } else {
           // If already authenticated and user data matches, just set initialized
           useCartStore.getState().setCartOwner(parsedUser.id);
           set({ isInitialized: true });
+          if (useCartStore.getState().getOwnerItems(parsedUser.id).length === 0) {
+            void syncCartAfterAuth(parsedUser.id);
+          }
         }
       } catch (error) {
         console.error("Failed to parse user from localStorage", error);

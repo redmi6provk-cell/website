@@ -32,7 +32,7 @@ export default function AdminDashboard() {
 
         if (canAccessAdmin(user?.role)) {
           const [pRes, oRes] = await Promise.all([
-            api.get("/products"),
+            api.get("/admin/products"),
             api.get("/admin/orders"),
           ]);
           products = pRes.data.data?.total || 0;

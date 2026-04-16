@@ -27,7 +27,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setAuth } = useAuthStore();
+  const { setAuth, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,11 +41,27 @@ function RegisterPageContent() {
   });
 
   useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (!isInitialized || !isAuthenticated) {
+      return;
+    }
+
+    router.replace(searchParams.get("redirect") || "/");
+  }, [isAuthenticated, isInitialized, router, searchParams]);
+
+  useEffect(() => {
     const phone = searchParams.get("phone");
     if (phone) {
       setValue("phone", phone);
     }
   }, [searchParams, setValue]);
+
+  if (isInitialized && isAuthenticated) {
+    return null;
+  }
 
   const onSubmit = async (data: RegisterFormValues) => {
     setIsLoading(true);
@@ -53,7 +69,7 @@ function RegisterPageContent() {
     try {
       const response = await api.post("/auth/register", data);
       const { user, token } = response.data.data;
-      setAuth(user, token);
+      await setAuth(user, token);
       router.push(searchParams.get("redirect") || "/");
     } catch (err: unknown) {
       const errorResponse = err as AxiosError<{ error?: string }>;

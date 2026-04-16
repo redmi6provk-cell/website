@@ -54,6 +54,8 @@ type Product struct {
 	Unit                 string             `json:"unit"`
 	ImageURL             string             `json:"image_url"`
 	SecondaryImageURL    string             `json:"secondary_image_url"`
+	IsActive             bool               `gorm:"default:true;not null" json:"is_active"`
+	CanDelete            bool               `gorm:"-" json:"can_delete"`
 	CreatedAt            time.Time          `json:"created_at"`
 }
 

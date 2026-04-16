@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  House,
+  Info,
   LayoutDashboard,
-  Menu,
+  Package2,
   Search,
   ShoppingCart,
   User,
@@ -19,20 +21,22 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/products", label: "Products" },
   { href: "/about", label: "About" },
-
 ];
 
-const subscribe = () => () => {};
+const mobileNavLinks = [
+  { href: "/", label: "Home", icon: House },
+  { href: "/products", label: "Products", icon: Package2 },
+  { href: "/about", label: "About", icon: Info },
+];
 
 export default function Navbar() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const { getTotalItems } = useCartStore();
+  const cartItemCount = useCartStore((state) => state.items.reduce((total, item) => total + item.quantity, 0));
   const { user, isAuthenticated, checkAuth, logout } = useAuthStore();
 
   useEffect(() => {
@@ -45,8 +49,6 @@ export default function Navbar() {
     }
   }, [isMobileSearchOpen]);
 
-  const isClient = useSyncExternalStore(subscribe, () => true, () => false);
-  const cartItemCount = isClient ? getTotalItems() : 0;
   const currentSearch = useMemo(() => searchParams.get("search") || "", [searchParams]);
 
   const isActiveLink = (href: string) => {
@@ -69,7 +71,6 @@ export default function Navbar() {
       params.set("search", query);
     }
 
-    setIsMenuOpen(false);
     setIsMobileSearchOpen(false);
     router.push(query ? `/products?${params.toString()}` : "/products");
   };
@@ -213,7 +214,6 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsMenuOpen(false);
                   setIsMobileSearchOpen(true);
                 }}
                 aria-label="Open search"
@@ -233,80 +233,42 @@ export default function Navbar() {
                   </span>
                 )}
               </Link>
-              <button
-                onClick={() => setIsMenuOpen((value) => !value)}
-                aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 text-zinc-700 transition-colors duration-200 hover:border-zinc-900 hover:text-zinc-950"
-              >
-                {isMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </button>
             </div>
           )}
         </div>
       </div>
 
-      <div
-        className={`overflow-hidden border-t border-zinc-200 bg-white transition-[max-height,opacity] duration-300 md:hidden ${
-          isMenuOpen && !isMobileSearchOpen ? "max-h-[28rem] opacity-100" : "max-h-0 opacity-0"
-        }`}
-      >
-        <div className="space-y-6 px-4 py-5 sm:px-6">
-          <nav className="space-y-3">
-            {navLinks.map(({ href, label }) => (
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200 bg-white/95 backdrop-blur md:hidden">
+        <nav className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.45rem)] pt-2">
+          {mobileNavLinks.map(({ href, label, icon: Icon }) => {
+            const active = isActiveLink(href);
+
+            return (
               <Link
                 key={href}
                 href={href}
-                onClick={() => setIsMenuOpen(false)}
-                className={`block border-b pb-3 text-base font-medium transition-colors duration-200 ${
-                  isActiveLink(href) ? "border-zinc-900 text-zinc-950" : "border-zinc-100 text-zinc-500 hover:text-zinc-950"
+                className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition-colors duration-200 ${
+                  active ? "bg-zinc-950 text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
                 }`}
               >
-                {label}
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
               </Link>
-            ))}
-          </nav>
+            );
+          })}
 
-          <div className="flex items-center justify-between border-t border-zinc-100 pt-4">
-            {isAuthenticated ? (
-              <>
-                <Link href="/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-zinc-900">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
-                    <User className="h-4 w-4" />
-                  </span>
-                  <span className="max-w-36 truncate">{user?.name || "Profile"}</span>
-                </Link>
-                <button
-                  onClick={() => {
-                    logout();
-                    setIsMenuOpen(false);
-                  }}
-                  className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-950"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <Link
-                href="/auth/login"
-                onClick={() => setIsMenuOpen(false)}
-                className="inline-flex rounded-full bg-zinc-950 px-5 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-zinc-800"
-              >
-                Login
-              </Link>
-            )}
-          </div>
-
-          {isStaffRole(user?.role) && (
-            <Link
-              href="/admin"
-              onClick={() => setIsMenuOpen(false)}
-              className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition-colors duration-200 hover:text-zinc-950"
-            >
-              <LayoutDashboard className="h-4 w-4" />
-              <span>Open Admin</span>
-            </Link>
-          )}
-        </div>
+          <Link
+            href={isAuthenticated ? "/dashboard" : "/auth/login"}
+            className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition-colors duration-200 ${
+              pathname?.startsWith("/dashboard") || pathname?.startsWith("/auth")
+                ? "bg-zinc-950 text-white"
+                : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
+            }`}
+          >
+            <User className="h-4 w-4" />
+            <span>Profile</span>
+          </Link>
+        </nav>
       </div>
     </header>
   );

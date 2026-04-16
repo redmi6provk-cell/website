@@ -4,6 +4,7 @@ import (
 	"backend/internal/models"
 	"errors"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -18,11 +19,14 @@ func NewProductRepository(db *gorm.DB) *ProductRepository {
 	return &ProductRepository{db: db}
 }
 
-func (r *ProductRepository) GetAll(category, brand, sort string, minPrice, maxPrice float64, offset, limit int) ([]models.Product, int64, error) {
+func (r *ProductRepository) GetAll(category, brand, sort string, minPrice, maxPrice float64, offset, limit int, includeInactive bool) ([]models.Product, int64, error) {
 	var products []models.Product
 	var total int64
 
 	query := r.db.Model(&models.Product{}).Preload("Category").Preload("Brand")
+	if !includeInactive {
+		query = query.Where("is_active = ?", true)
+	}
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)
@@ -53,12 +57,26 @@ func (r *ProductRepository) GetAll(category, brand, sort string, minPrice, maxPr
 	}
 
 	err := query.Find(&products).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if includeInactive {
+		if err := r.attachDeleteAvailability(products); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	return products, total, err
 }
 
-func (r *ProductRepository) GetByID(id string) (*models.Product, error) {
+func (r *ProductRepository) GetByID(id string, includeInactive bool) (*models.Product, error) {
 	var product models.Product
-	if err := r.db.Preload("Category").Preload("Brand").Where("id = ?", id).First(&product).Error; err != nil {
+	query := r.db.Preload("Category").Preload("Brand").Where("id = ?", id)
+	if !includeInactive {
+		query = query.Where("is_active = ?", true)
+	}
+	if err := query.First(&product).Error; err != nil {
 		return nil, err
 	}
 	return &product, nil
@@ -90,6 +108,10 @@ func (r *ProductRepository) Delete(id string) error {
 	})
 }
 
+func (r *ProductRepository) SetActive(id string, isActive bool) error {
+	return r.db.Model(&models.Product{}).Where("id = ?", id).Update("is_active", isActive).Error
+}
+
 func (r *ProductRepository) UpdateStock(id string, stock int) error {
 	return r.db.Model(&models.Product{}).Where("id = ?", id).Update("stock", stock).Error
 }
@@ -110,6 +132,42 @@ func (r *ProductRepository) ReduceStock(id string, quantity int) error {
 func (r *ProductRepository) BulkUpsert(products []models.Product) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},
-		DoUpdates: clause.AssignmentColumns([]string{"price", "stock", "category_id", "brand_id", "unit", "discount", "description", "minimum_order_quantity", "quantity_discounts", "image_url", "secondary_image_url"}),
+		DoUpdates: clause.AssignmentColumns([]string{"price", "stock", "category_id", "brand_id", "unit", "discount", "description", "minimum_order_quantity", "quantity_discounts", "image_url", "secondary_image_url", "is_active"}),
 	}).Create(&products).Error
+}
+
+func (r *ProductRepository) attachDeleteAvailability(products []models.Product) error {
+	if len(products) == 0 {
+		return nil
+	}
+
+	productIDs := make([]uuid.UUID, 0, len(products))
+	for _, product := range products {
+		productIDs = append(productIDs, product.ID)
+	}
+
+	type orderLinkCount struct {
+		ProductID uuid.UUID
+		Count     int64
+	}
+
+	var linked []orderLinkCount
+	if err := r.db.Model(&models.OrderItem{}).
+		Select("product_id, COUNT(*) as count").
+		Where("product_id IN ?", productIDs).
+		Group("product_id").
+		Scan(&linked).Error; err != nil {
+		return err
+	}
+
+	linkedMap := make(map[uuid.UUID]int64, len(linked))
+	for _, item := range linked {
+		linkedMap[item.ProductID] = item.Count
+	}
+
+	for i := range products {
+		products[i].CanDelete = linkedMap[products[i].ID] == 0
+	}
+
+	return nil
 }

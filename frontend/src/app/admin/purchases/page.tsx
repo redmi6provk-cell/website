@@ -128,7 +128,7 @@ export default function AdminPurchasesPage() {
     const fetchData = async () => {
       try {
         const [productRes, supplierRes, purchaseRes, settingsRes] = await Promise.allSettled([
-          api.get("/products"),
+          api.get("/admin/products"),
           api.get("/admin/arp/parties"),
           api.get("/admin/purchases"),
           api.get("/admin/settings"),
@@ -506,7 +506,7 @@ export default function AdminPurchasesPage() {
                   />
                 </div>
               </div>
-
+  
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-1">
                   <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Supplier</label>

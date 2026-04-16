@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ClipboardList,
+  Shield,
   LayoutDashboard,
   Phone,
   ShoppingBag,
@@ -14,10 +15,11 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/Button";
+import { isStaffRole } from "@/lib/roles";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
+  const { user, isAuthenticated, isInitialized, checkAuth, logout } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
@@ -63,6 +65,7 @@ export default function DashboardPage() {
       icon: ClipboardList,
     },
   ];
+  const canOpenAdmin = isStaffRole(user.role);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#ffffff_100%)] py-12">
@@ -90,7 +93,33 @@ export default function DashboardPage() {
                     View Cart
                   </Button>
                 </Link>
+                <Button variant="ghost" className="rounded-full px-6 text-zinc-600 hover:bg-zinc-100" onClick={logout}>
+                  Logout
+                </Button>
               </div>
+
+              {canOpenAdmin && (
+                <Link
+                  href="/admin"
+                  className="mt-8 block rounded-[1.75rem] border border-zinc-900 bg-zinc-950 p-5 text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.8)] transition-transform duration-200 hover:-translate-y-0.5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-300">
+                        <Shield className="h-3.5 w-3.5" />
+                        Staff Access
+                      </div>
+                      <h2 className="mt-4 text-2xl font-black tracking-tight">Go to Admin Panel</h2>
+                      <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-300">
+                        Products, orders, settings aur operations tools yahin se manage karo.
+                      </p>
+                    </div>
+                    <span className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-zinc-950">
+                      <ArrowRight className="h-5 w-5" />
+                    </span>
+                  </div>
+                </Link>
+              )}
             </div>
 
             <div className="rounded-[1.75rem] bg-zinc-950 p-6 text-white shadow-inner">

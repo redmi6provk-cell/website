@@ -24,9 +24,12 @@ func (s *CartService) GetCart(userID uuid.UUID) ([]models.Cart, error) {
 }
 
 func (s *CartService) AddToCart(userID, productID uuid.UUID, quantity int) error {
-	product, err := s.productRepo.GetByID(productID.String())
+	product, err := s.productRepo.GetByID(productID.String(), false)
 	if err != nil {
 		return errors.New("product not found")
+	}
+	if !product.IsActive {
+		return errors.New("product is inactive")
 	}
 	if product.Stock < 1 {
 		return errors.New("product is out of stock")
@@ -81,9 +84,12 @@ func (s *CartService) ClearCart(userID uuid.UUID) error {
 func (s *CartService) SyncCart(userID uuid.UUID, items []models.Cart) error {
 	sanitizedItems := make([]models.Cart, 0, len(items))
 	for _, item := range items {
-		product, err := s.productRepo.GetByID(item.ProductID.String())
+		product, err := s.productRepo.GetByID(item.ProductID.String(), true)
 		if err != nil {
 			return errors.New("product not found")
+		}
+		if !product.IsActive {
+			return errors.New("product is inactive")
 		}
 		cappedQuantity := int(math.Min(float64(item.Quantity), float64(product.Stock)))
 		if cappedQuantity <= 0 {

@@ -18,6 +18,8 @@ import {
   ChevronLeft,
   Image as ImageIcon,
   Pencil,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 
 interface Category {
@@ -44,6 +46,8 @@ interface Product {
   brand_info?: Brand;
   image_url: string;
   secondary_image_url?: string;
+  is_active: boolean;
+  can_delete?: boolean;
 }
 
 function formatPrice(price: number) {
@@ -131,7 +135,7 @@ export default function AdminProductsPage() {
   const fetchData = async () => {
     try {
       const [pRes, cRes, bRes] = await Promise.all([
-        api.get("/products"),
+        api.get("/admin/products"),
         api.get("/admin/categories"),
         api.get("/admin/brands"),
       ]);
@@ -253,12 +257,25 @@ export default function AdminProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure?")) return;
+    if (!confirm("Delete this product permanently? Ye sirf tab kaam karega jab product kisi order me use na hua ho.")) return;
     try {
       await api.delete(`/admin/products/${id}`);
       await fetchData();
     } catch (error) {
       alert(getApiErrorMessage(error, "Delete failed"));
+    }
+  };
+
+  const handleToggleActive = async (product: Product) => {
+    const nextState = !product.is_active;
+    const actionLabel = nextState ? "show" : "hide";
+    if (!confirm(`Are you sure? Product ${actionLabel} ho jayega.`)) return;
+
+    try {
+      await api.put(`/admin/products/${product.id}/active`, { is_active: nextState });
+      await fetchData();
+    } catch (error) {
+      alert(getApiErrorMessage(error, "Visibility update failed"));
     }
   };
 
@@ -336,6 +353,13 @@ export default function AdminProductsPage() {
                         <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-zinc-600">
                           MOQ {p.minimum_order_quantity || 1}
                         </span>
+                        <span
+                          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+                            p.is_active ? "bg-emerald-50 text-emerald-700" : "bg-zinc-200 text-zinc-600"
+                          }`}
+                        >
+                          {p.is_active ? "Active" : "Hidden"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -369,20 +393,32 @@ export default function AdminProductsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handleToggleActive(p)}
+                      className="h-11 rounded-2xl border border-zinc-200 text-zinc-700 hover:bg-zinc-100"
+                    >
+                      {p.is_active ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                      {p.is_active ? "Hide" : "Show"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleEdit(p)}
                       className="h-11 rounded-2xl border border-zinc-200 text-zinc-700 hover:bg-zinc-100"
                     >
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
                     </Button>
+                  </div>
+                  <div className="mt-3">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDelete(p.id)}
-                      className="h-11 rounded-2xl border border-red-100 text-red-500 hover:bg-red-50 hover:text-red-600"
+                      disabled={!p.can_delete}
+                      className="h-11 w-full rounded-2xl border border-red-100 text-red-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-400"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
+                      {p.can_delete ? "Delete" : "Delete blocked by orders"}
                     </Button>
                   </div>
                 </article>
@@ -427,6 +463,9 @@ export default function AdminProductsPage() {
                         <div>
                           <p className="font-bold uppercase text-zinc-900">{p.name}</p>
                           <p className="text-xs font-medium text-zinc-400">{p.brand_info?.name || "No Brand"}</p>
+                          <p className={`mt-1 text-[11px] font-bold uppercase ${p.is_active ? "text-emerald-600" : "text-zinc-400"}`}>
+                            {p.is_active ? "Active" : "Hidden"}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -457,8 +496,18 @@ export default function AdminProductsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        onClick={() => handleToggleActive(p)}
+                        className="h-10 w-10 rounded-xl border border-zinc-50 p-0 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-700"
+                        title={p.is_active ? "Hide product" : "Show product"}
+                      >
+                        {p.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleEdit(p)}
                         className="h-10 w-10 rounded-xl border border-zinc-50 p-0 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-700"
+                        title="Edit product"
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -466,7 +515,9 @@ export default function AdminProductsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(p.id)}
-                        className="h-10 w-10 rounded-xl border border-zinc-50 p-0 text-red-300 hover:bg-red-50 hover:text-red-600"
+                        disabled={!p.can_delete}
+                        className="h-10 w-10 rounded-xl border border-zinc-50 p-0 text-red-300 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-zinc-300"
+                        title={p.can_delete ? "Delete product" : "Delete blocked by orders"}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

@@ -75,7 +75,7 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(187,247,208,0.35),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(254,240,138,0.28),_transparent_30%),linear-gradient(180deg,_#fcfcf8_0%,_#f4f4ef_100%)]">
-      <div className="container mx-auto px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10 lg:py-10">
+      <div className="container mx-auto px-4 py-8 pb-52 sm:px-6 lg:px-8 lg:pb-10 lg:py-10">
         <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/75 shadow-[0_32px_120px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="border-b border-zinc-200/70 px-6 py-8 sm:px-8 lg:px-10">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:items-end">
@@ -332,7 +332,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
+      <div className="fixed inset-x-0 bottom-24 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
         <div className="mx-auto max-w-lg">
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>

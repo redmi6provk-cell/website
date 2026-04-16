@@ -32,7 +32,7 @@ const footerColumns = [
 export default function Footer() {
   return (
     <footer className="border-t border-zinc-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-7xl px-4 py-14 pb-40 sm:px-6 md:pb-14 lg:px-10">
         <div className="grid gap-12 border-b border-zinc-200 pb-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
           <div className="max-w-md">
             <Link href="/" className="inline-flex items-center gap-3 text-zinc-950 transition-colors duration-200 hover:text-green-700">

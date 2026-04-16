@@ -20,6 +20,14 @@ func NewProductHandler(productService *services.ProductService) *ProductHandler 
 }
 
 func (h *ProductHandler) GetProducts(c *gin.Context) {
+	h.getProducts(c, false)
+}
+
+func (h *ProductHandler) GetAdminProducts(c *gin.Context) {
+	h.getProducts(c, true)
+}
+
+func (h *ProductHandler) getProducts(c *gin.Context, includeInactive bool) {
 	category := c.Query("category")
 	brand := c.Query("brand")
 	sort := c.Query("sort")
@@ -30,7 +38,17 @@ func (h *ProductHandler) GetProducts(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset := (page - 1) * limit
 
-	products, total, err := h.productService.GetAll(category, brand, sort, minPrice, maxPrice, offset, limit)
+	var (
+		products []models.Product
+		total    int64
+		err      error
+	)
+
+	if includeInactive {
+		products, total, err = h.productService.GetAllForAdmin(category, brand, sort, minPrice, maxPrice, offset, limit)
+	} else {
+		products, total, err = h.productService.GetAll(category, brand, sort, minPrice, maxPrice, offset, limit)
+	}
 	if err != nil {
 		response.Fail(c, http.StatusInternalServerError, "Failed to fetch products")
 		return
@@ -71,13 +89,13 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	id := c.Param("id")
-	product, err := h.productService.GetByID(id)
+	product, err := h.productService.GetByIDForAdmin(id)
 	if err != nil {
 		response.Fail(c, http.StatusNotFound, "Product not found")
 		return
 	}
 
-	if err := c.ShouldBindJSON(&product); err != nil {
+	if err := c.ShouldBindJSON(product); err != nil {
 		response.Fail(c, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
@@ -87,6 +105,35 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 	response.OK(c, "Product updated successfully", product)
+}
+
+func (h *ProductHandler) UpdateProductActive(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		IsActive bool `json:"is_active"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if _, err := h.productService.GetByIDForAdmin(id); err != nil {
+		response.Fail(c, http.StatusNotFound, "Product not found")
+		return
+	}
+
+	if err := h.productService.SetActive(id, req.IsActive); err != nil {
+		response.Fail(c, http.StatusInternalServerError, "Failed to update product visibility")
+		return
+	}
+
+	message := "Product activated successfully"
+	if !req.IsActive {
+		message = "Product hidden successfully"
+	}
+
+	response.OK(c, message, gin.H{"is_active": req.IsActive})
 }
 
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {

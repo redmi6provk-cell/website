@@ -145,7 +145,7 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white py-12">
+    <div className="min-h-screen bg-white py-12 pb-56 md:pb-12">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <Button
           variant="ghost"
@@ -347,7 +347,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              <div className="flex gap-4 border-t border-zinc-100 pt-6">
+              <div className="hidden gap-4 border-t border-zinc-100 pt-6 md:flex">
                 <Button
                   onClick={handleAddToCart}
                   className="h-12 flex-1 rounded-2xl"
@@ -359,6 +359,22 @@ export default function ProductDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-24 z-40 border-t border-zinc-200 bg-white/96 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.28)] backdrop-blur md:hidden">
+        <div className="mx-auto max-w-md">
+          <p className="mb-2 text-center text-xs font-medium tracking-[0.08em] text-zinc-500">
+            Rs. {pricing.finalUnitPrice} each
+          </p>
+          <Button
+            onClick={handleAddToCart}
+            className="h-12 w-full rounded-2xl"
+            leftIcon={ShoppingCart}
+            disabled={product.stock <= 0 || !canMeetMinimumStock}
+          >
+            Add to Cart
+          </Button>
         </div>
       </div>
     </div>
