@@ -48,6 +48,10 @@ func (r *FinanceTransactionRepository) Replace(entry *models.FinanceTransaction)
 	})
 }
 
+func (r *FinanceTransactionRepository) Create(entry *models.FinanceTransaction) error {
+	return r.db.Create(entry).Error
+}
+
 func (r *FinanceTransactionRepository) DeleteBySource(sourceModule string, sourceID string) error {
 	return r.db.Where("source_module = ? AND source_id = ?", sourceModule, sourceID).
 		Delete(&models.FinanceTransaction{}).Error

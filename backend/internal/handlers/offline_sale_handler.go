@@ -26,15 +26,16 @@ type offlineSaleItemRequest struct {
 }
 
 type offlineSaleRequest struct {
-	BillNumber     string                   `json:"bill_number"`
-	SaleDate       string                   `json:"sale_date"`
-	CustomerName   string                   `json:"customer_name"`
-	CustomerPhone  string                   `json:"customer_phone"`
-	ShopName       string                   `json:"shop_name"`
-	PaymentMode    string                   `json:"payment_mode"`
-	Notes          string                   `json:"notes"`
-	AmountReceived float64                  `json:"amount_received"`
-	Items          []offlineSaleItemRequest `json:"items"`
+	BillNumber      string                   `json:"bill_number"`
+	SaleDate        string                   `json:"sale_date"`
+	CustomerPartyID string                   `json:"customer_party_id"`
+	CustomerName    string                   `json:"customer_name"`
+	CustomerPhone   string                   `json:"customer_phone"`
+	ShopName        string                   `json:"shop_name"`
+	PaymentMode     string                   `json:"payment_mode"`
+	Notes           string                   `json:"notes"`
+	AmountReceived  float64                  `json:"amount_received"`
+	Items           []offlineSaleItemRequest `json:"items"`
 }
 
 func NewOfflineSaleHandler(service *services.OfflineSaleService) *OfflineSaleHandler {
@@ -132,6 +133,16 @@ func buildOfflineSaleModel(req offlineSaleRequest) (models.OfflineSale, error) {
 	if err != nil {
 		return models.OfflineSale{}, err
 	}
+
+	var customerPartyID *uuid.UUID
+	if req.CustomerPartyID != "" {
+		parsedPartyID, parseErr := uuid.Parse(req.CustomerPartyID)
+		if parseErr != nil {
+			return models.OfflineSale{}, parseErr
+		}
+		customerPartyID = &parsedPartyID
+	}
+
 	items := make([]models.OfflineSaleItem, 0, len(req.Items))
 	for _, item := range req.Items {
 		productID, parseErr := uuid.Parse(item.ProductID)
@@ -149,14 +160,15 @@ func buildOfflineSaleModel(req offlineSaleRequest) (models.OfflineSale, error) {
 	}
 
 	return models.OfflineSale{
-		BillNumber:     req.BillNumber,
-		SaleDate:       saleDate,
-		CustomerName:   req.CustomerName,
-		CustomerPhone:  req.CustomerPhone,
-		ShopName:       req.ShopName,
-		PaymentMode:    req.PaymentMode,
-		Notes:          req.Notes,
-		AmountReceived: req.AmountReceived,
-		Items:          items,
+		BillNumber:      req.BillNumber,
+		SaleDate:        saleDate,
+		CustomerPartyID: customerPartyID,
+		CustomerName:    req.CustomerName,
+		CustomerPhone:   req.CustomerPhone,
+		ShopName:        req.ShopName,
+		PaymentMode:     req.PaymentMode,
+		Notes:           req.Notes,
+		AmountReceived:  req.AmountReceived,
+		Items:           items,
 	}, nil
 }

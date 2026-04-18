@@ -178,6 +178,7 @@ type UpdateOrderStatusInput struct {
 	PaymentStatus           string
 	Notes                   string
 	PaymentCollectionMethod string
+	ReceivedAmount          *float64
 }
 
 func (s *OrderService) UpdateStatus(orderID uuid.UUID, input UpdateOrderStatusInput, changedBy *uuid.UUID) error {
@@ -208,23 +209,66 @@ func (s *OrderService) UpdateStatus(orderID uuid.UUID, input UpdateOrderStatusIn
 		}
 	}
 
-	if input.Status == models.OrderStatusConfirmed &&
-		order.Status != models.OrderStatusConfirmed &&
-		order.PaymentMode == models.OrderPaymentModeCOD &&
-		s.settingsRepo != nil {
-		if err := s.settingsRepo.ApplyCollectedPayment(order.Total, input.PaymentCollectionMethod); err != nil {
-			return err
+	newReceivedAmount := order.ReceivedAmount
+	if input.ReceivedAmount != nil {
+		if *input.ReceivedAmount < 0 {
+			return errors.New("received amount cannot be negative")
+		}
+		if *input.ReceivedAmount > order.Total {
+			return errors.New("received amount cannot exceed total order amount")
+		}
+		newReceivedAmount = *input.ReceivedAmount
+	}
+
+	newCollectionMethod := strings.TrimSpace(input.PaymentCollectionMethod)
+	if newCollectionMethod == "" {
+		newCollectionMethod = strings.TrimSpace(order.PaymentCollectionMethod)
+	}
+
+	if order.PaymentMode == models.OrderPaymentModeCOD && input.Status == models.OrderStatusConfirmed {
+		if newReceivedAmount >= order.Total && order.Total > 0 {
+			input.PaymentStatus = models.OrderPaymentStatusPaid
+		} else {
+			input.PaymentStatus = models.OrderPaymentStatusUnpaid
 		}
 	}
 
-	if err := s.orderRepo.UpdateStatus(orderID, input.Status, input.Note, input.PaymentStatus, input.Notes, changedBy); err != nil {
+	if order.PaymentMode == models.OrderPaymentModeCOD && s.settingsRepo != nil {
+		shouldSyncBalances :=
+			input.Status == models.OrderStatusConfirmed &&
+				(order.Status != models.OrderStatusConfirmed || input.ReceivedAmount != nil || newCollectionMethod != strings.TrimSpace(order.PaymentCollectionMethod))
+
+		if shouldSyncBalances {
+			if order.Status == models.OrderStatusConfirmed && order.ReceivedAmount > 0 && strings.TrimSpace(order.PaymentCollectionMethod) != "" {
+				if err := s.settingsRepo.AdjustPaymentBalance(-order.ReceivedAmount, order.PaymentCollectionMethod); err != nil {
+					return err
+				}
+			}
+			if newReceivedAmount > 0 && newCollectionMethod != "" {
+				if err := s.settingsRepo.ApplyCollectedPayment(newReceivedAmount, newCollectionMethod); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if err := s.orderRepo.UpdateStatus(orderID, input.Status, input.Note, input.PaymentStatus, input.Notes, &newReceivedAmount, newCollectionMethod, changedBy); err != nil {
 		return err
 	}
 
+	order.Status = input.Status
+	if input.PaymentStatus != "" {
+		order.PaymentStatus = input.PaymentStatus
+	}
+	if input.Notes != "" {
+		order.Notes = input.Notes
+	}
+	order.ReceivedAmount = newReceivedAmount
+	order.PaymentCollectionMethod = newCollectionMethod
+
 	if input.Status == models.OrderStatusConfirmed &&
-		order.Status != models.OrderStatusConfirmed &&
 		order.PaymentMode == models.OrderPaymentModeCOD {
-		return s.syncFinanceTransaction(order, input.PaymentCollectionMethod)
+		return s.syncFinanceTransaction(order, newCollectionMethod)
 	}
 
 	return nil
@@ -248,6 +292,35 @@ func (s *OrderService) SyncMissingERPInvoices() error {
 
 		orderCopy := order
 		if err := s.arpRepo.CreateInvoiceForOrder(user, &orderCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *OrderService) SyncFinanceTransactions() error {
+	if s.financeRepo == nil {
+		return nil
+	}
+
+	orders, err := s.orderRepo.GetAllOrders()
+	if err != nil {
+		return err
+	}
+
+	for index := range orders {
+		order := &orders[index]
+		if order.Status == models.OrderStatusConfirmed &&
+			order.PaymentMode == models.OrderPaymentModeCOD &&
+			order.ReceivedAmount > 0 {
+			if err := s.syncFinanceTransaction(order, ""); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := s.financeRepo.DeleteBySource("order_cod", order.ID.String()); err != nil {
 			return err
 		}
 	}
@@ -294,6 +367,9 @@ func (s *OrderService) syncFinanceTransaction(order *models.Order, paymentMode s
 
 	mode := paymentMode
 	if mode == "" {
+		mode = order.PaymentCollectionMethod
+	}
+	if mode == "" {
 		mode = order.PaymentMode
 	}
 
@@ -302,15 +378,35 @@ func (s *OrderService) syncFinanceTransaction(order *models.Order, paymentMode s
 		remarks = "Order payment collected"
 	}
 
+	if order.ReceivedAmount <= 0 {
+		return s.financeRepo.DeleteBySource("order_cod", order.ID.String())
+	}
+
+	partyID := ""
+	if s.arpRepo != nil {
+		phone := strings.TrimSpace(order.CustomerPhone)
+		if phone == "" && s.userRepo != nil {
+			if user, err := s.userRepo.FindByID(order.UserID); err == nil {
+				phone = strings.TrimSpace(user.Phone)
+			}
+		}
+		if phone != "" {
+			if party, err := s.arpRepo.FindPartyByPhone(phone); err == nil {
+				partyID = party.PartyID.String()
+			}
+		}
+	}
+
 	return s.financeRepo.Replace(&models.FinanceTransaction{
 		SourceModule:    "order_cod",
 		SourceID:        order.ID.String(),
 		TransactionDate: time.Now(),
 		Direction:       "in",
 		PaymentMode:     mode,
-		Amount:          order.Total,
+		Amount:          order.ReceivedAmount,
 		ReferenceID:     order.ID.String(),
 		ReferenceLabel:  s.orderReferenceLabel(order),
+		PartyID:         partyID,
 		PartyName:       order.CustomerName,
 		PartyType:       "customer",
 		Remarks:         remarks,

@@ -24,11 +24,20 @@ func main() {
 	if err := config.EnsureProductActiveSchema(); err != nil {
 		log.Fatalf("Failed to align product active schema: %v", err)
 	}
+	if err := config.EnsureARPSchema(); err != nil {
+		log.Fatalf("Failed to align ARP schema: %v", err)
+	}
 	if err := config.EnsureOrderInvoiceNumberSchema(); err != nil {
 		log.Fatalf("Failed to align order invoice number schema: %v", err)
 	}
+	if err := config.EnsureOrderPaymentTrackingSchema(); err != nil {
+		log.Fatalf("Failed to align order payment tracking schema: %v", err)
+	}
 	if err := config.EnsureSalesInvoiceSequenceSchema(); err != nil {
 		log.Fatalf("Failed to align sales invoice sequence schema: %v", err)
+	}
+	if err := config.EnsureOfflineSalePartySchema(); err != nil {
+		log.Fatalf("Failed to align offline sale party schema: %v", err)
 	}
 
 	// Initialize Repositories
@@ -51,13 +60,13 @@ func main() {
 	productService := services.NewProductService(productRepo)
 	cartService := services.NewCartService(cartRepo, productRepo)
 	orderService := services.NewOrderService(orderRepo, cartRepo, arpRepo, userRepo, productRepo, invoiceSequenceRepo, settingsRepo, financeTransactionRepo)
-	arpService := services.NewARPService(arpRepo, financeTransactionRepo)
+	arpService := services.NewARPService(arpRepo, financeTransactionRepo, settingsRepo)
 	categoryService := services.NewCategoryService(categoryRepo)
 	brandService := services.NewBrandService(brandRepo)
 	settingsService := services.NewSettingsService(settingsRepo, userRepo)
 	purchaseService := services.NewPurchaseService(purchaseRepo, arpRepo, settingsRepo, financeTransactionRepo)
 	expenseService := services.NewExpenseService(expenseRepo, settingsRepo, financeTransactionRepo)
-	offlineSaleService := services.NewOfflineSaleService(offlineSaleRepo, invoiceSequenceRepo, settingsRepo, financeTransactionRepo)
+	offlineSaleService := services.NewOfflineSaleService(offlineSaleRepo, invoiceSequenceRepo, arpRepo, settingsRepo, financeTransactionRepo)
 	invoiceSequenceService := services.NewInvoiceSequenceService(invoiceSequenceRepo)
 
 	// Initialize Handlers
@@ -78,6 +87,9 @@ func main() {
 
 	if err := orderService.SyncMissingERPInvoices(); err != nil {
 		log.Fatalf("Failed to sync ERP invoices from orders: %v", err)
+	}
+	if err := orderService.SyncFinanceTransactions(); err != nil {
+		log.Fatalf("Failed to sync finance transactions from orders: %v", err)
 	}
 	if err := expenseService.SyncFinanceTransactions(); err != nil {
 		log.Fatalf("Failed to sync expense finance transactions: %v", err)

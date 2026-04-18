@@ -104,11 +104,12 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status                  string `json:"status" binding:"required"`
-		Note                    string `json:"note"`
-		PaymentStatus           string `json:"payment_status"`
-		Notes                   string `json:"notes"`
-		PaymentCollectionMethod string `json:"payment_collection_method"`
+		Status                  string   `json:"status" binding:"required"`
+		Note                    string   `json:"note"`
+		PaymentStatus           string   `json:"payment_status"`
+		Notes                   string   `json:"notes"`
+		PaymentCollectionMethod string   `json:"payment_collection_method"`
+		ReceivedAmount          *float64 `json:"received_amount"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Fail(c, http.StatusBadRequest, "Status is required")
@@ -127,6 +128,7 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 		PaymentStatus:           req.PaymentStatus,
 		Notes:                   req.Notes,
 		PaymentCollectionMethod: req.PaymentCollectionMethod,
+		ReceivedAmount:          req.ReceivedAmount,
 	}, &changedBy); err != nil {
 		response.Fail(c, http.StatusBadRequest, err.Error())
 		return

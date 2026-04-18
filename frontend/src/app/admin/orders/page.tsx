@@ -7,6 +7,8 @@ import { useAuthStore } from "@/store/authStore";
 import { Order } from "@/types";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { PageLoader } from "@/components/ui/PageLoader";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import {
   ChevronLeft,
   Download,
@@ -192,11 +194,13 @@ export default function AdminOrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [confirmNote, setConfirmNote] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [receivedAmount, setReceivedAmount] = useState("");
   const [codCollectionMethod, setCodCollectionMethod] = useState("cash");
   const [codCollectionOptions, setCodCollectionOptions] = useState<string[]>(["cash"]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSavingInvoiceNumber, setIsSavingInvoiceNumber] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -244,6 +248,11 @@ export default function AdminOrdersPage() {
     if (!selectedOrder) return;
     setConfirmNote("");
     setInvoiceNumber(getInvoiceReference(selectedOrder));
+    setReceivedAmount(
+      getPaymentMode(selectedOrder) === "cod"
+        ? String(selectedOrder.received_amount ?? selectedOrder.total)
+        : ""
+    );
   }, [selectedOrder]);
 
   useEffect(() => {
@@ -319,15 +328,27 @@ export default function AdminOrdersPage() {
         getPaymentMode(selectedOrder) === "cod"
           ? `COD payment received via ${codCollectionMethod}.`
           : "";
-      const composedNote = [confirmNote.trim(), paymentCollectionNote].filter(Boolean).join(" ");
-      const composedOrderNotes = [selectedOrder.notes?.trim(), paymentCollectionNote].filter(Boolean).join("\n");
+      const normalizedReceivedAmount = Math.max(0, Number(receivedAmount || 0));
+      const derivedPaymentStatus =
+        getPaymentMode(selectedOrder) === "cod"
+          ? normalizedReceivedAmount >= selectedOrder.total
+            ? "paid"
+            : "unpaid"
+          : undefined;
+      const paymentAmountNote =
+        getPaymentMode(selectedOrder) === "cod" && receivedAmount.trim()
+          ? `Received amount: Rs. ${Number(receivedAmount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}.`
+          : "";
+      const composedNote = [confirmNote.trim(), paymentCollectionNote, paymentAmountNote].filter(Boolean).join(" ");
+      const composedOrderNotes = [selectedOrder.notes?.trim(), paymentCollectionNote, paymentAmountNote].filter(Boolean).join("\n");
 
       await api.put(`/admin/orders/${selectedOrder.id}/status`, {
         status: "confirmed",
         note: composedNote || "Order confirmed by admin.",
-        payment_status: getPaymentMode(selectedOrder) === "cod" ? "paid" : undefined,
+        payment_status: derivedPaymentStatus,
         notes: composedOrderNotes || undefined,
         payment_collection_method: getPaymentMode(selectedOrder) === "cod" ? codCollectionMethod : undefined,
+        received_amount: getPaymentMode(selectedOrder) === "cod" ? normalizedReceivedAmount : undefined,
       });
 
       setOrders((current) =>
@@ -337,7 +358,9 @@ export default function AdminOrdersPage() {
                 ...order,
                 invoice_number: nextInvoiceNumber,
                 status: "confirmed",
-                payment_status: getPaymentMode(order) === "cod" ? "paid" : order.payment_status,
+                payment_status: getPaymentMode(order) === "cod" ? derivedPaymentStatus : order.payment_status,
+                received_amount: getPaymentMode(order) === "cod" ? normalizedReceivedAmount : order.received_amount,
+                payment_collection_method: getPaymentMode(order) === "cod" ? codCollectionMethod : order.payment_collection_method,
                 notes: composedOrderNotes || order.notes,
                 status_events: [
                   ...(order.status_events || []),
@@ -356,6 +379,8 @@ export default function AdminOrdersPage() {
       );
       setInvoiceNumber(nextInvoiceNumber);
       setConfirmNote("");
+      setReceivedAmount(getPaymentMode(selectedOrder) === "cod" ? String(normalizedReceivedAmount) : "");
+      setSuccessMessage("Order updated successfully.");
     } catch (updateError: unknown) {
       alert(getApiErrorMessage(updateError, "Order confirm failed"));
     } finally {
@@ -381,6 +406,7 @@ export default function AdminOrdersPage() {
             : order
         )
       );
+      setSuccessMessage("Invoice number saved successfully.");
     } catch (saveError: unknown) {
       alert(getApiErrorMessage(saveError, "Invoice number save failed"));
     } finally {
@@ -542,7 +568,13 @@ export default function AdminOrdersPage() {
   };
 
   if (!isInitialized || loading) {
-    return <div className="p-12 text-center">Loading Orders Management...</div>;
+    return (
+      <PageLoader
+        compact
+        title="Loading Orders"
+        subtitle="Order list aur customer details fetch ho rahi hain."
+      />
+    );
   }
 
   return (
@@ -948,19 +980,36 @@ export default function AdminOrdersPage() {
                         className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                       />
                       {getPaymentMode(selectedOrder) === "cod" && (
-                        <div className="mt-4">
-                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">COD Payment Received In</label>
-                          <select
-                            value={codCollectionMethod}
-                            onChange={(e) => setCodCollectionMethod(e.target.value)}
-                            className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
-                          >
-                            {codCollectionOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option === "cash" ? "Cash" : option}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <div>
+                            <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">COD Payment Received In</label>
+                            <select
+                              value={codCollectionMethod}
+                              onChange={(e) => setCodCollectionMethod(e.target.value)}
+                              className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
+                            >
+                              {codCollectionOptions.map((option) => (
+                                <option key={option} value={option}>
+                                  {option === "cash" ? "Cash" : option}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Received Amount</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={receivedAmount}
+                              onChange={(e) => setReceivedAmount(e.target.value)}
+                              placeholder="Enter received amount"
+                              className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
+                            />
+                            <div className="mt-2 text-xs text-zinc-500">
+                              Outstanding after confirm: {formatCurrency(Math.max(0, selectedOrder.total - Number(receivedAmount || 0)))}
+                            </div>
+                          </div>
                         </div>
                       )}
                       <div className="mt-4 flex flex-wrap gap-3">
@@ -1035,6 +1084,12 @@ export default function AdminOrdersPage() {
           </aside>
         </div>
       )}
+      <SuccessPopup
+        isOpen={Boolean(successMessage)}
+        message={successMessage || ""}
+        onClose={() => setSuccessMessage(null)}
+        title="Form Submitted"
+      />
     </div>
   );
 }

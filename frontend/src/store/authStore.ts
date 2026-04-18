@@ -20,21 +20,31 @@ type ServerCartItem = {
   quantity: number;
 };
 
+function normalizeCartItems(items: CartItem[]) {
+  return items
+    .filter((item) => item?.product?.id && item.quantity > 0)
+    .map((item) => ({
+      product: item.product,
+      quantity: Math.max(0, Math.min(item.quantity, Math.max(0, item.product.stock))),
+    }))
+    .filter((item) => item.quantity > 0);
+}
+
 async function syncCartAfterAuth(userId: string) {
   const cartStore = useCartStore.getState();
-  const guestItems = cartStore.getOwnerItems(null);
-  const localUserItems = cartStore.getOwnerItems(userId);
-
-  let serverItems: CartItem[] = localUserItems;
+  const guestItems = normalizeCartItems(cartStore.getOwnerItems(null));
+  let serverItems: CartItem[] = [];
   try {
     const response = await api.get("/cart");
     const serverCart = Array.isArray(response.data?.data) ? (response.data.data as ServerCartItem[]) : [];
-    serverItems = serverCart
-      .filter((item) => item?.product?.id)
-      .map((item) => ({
-        product: item.product,
-        quantity: item.quantity,
-      }));
+    serverItems = normalizeCartItems(
+      serverCart
+        .filter((item) => item?.product?.id)
+        .map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+        }))
+    );
   } catch (error) {
     console.error("Failed to fetch server cart after auth", error);
   }
@@ -59,6 +69,10 @@ async function syncCartAfterAuth(userId: string) {
   cartStore.setOwnerItems(userId, mergedItems);
   cartStore.clearOwnerItems(null);
   cartStore.setCartOwner(userId);
+
+  if (guestItems.length === 0) {
+    return;
+  }
 
   try {
     await api.post("/cart/sync", {
@@ -149,16 +163,12 @@ export const useAuthStore = create<AuthState>((set) => ({
             isAuthenticated: true,
             isInitialized: true,
           });
-          if (useCartStore.getState().getOwnerItems(parsedUser.id).length === 0) {
-            void syncCartAfterAuth(parsedUser.id);
-          }
+          void syncCartAfterAuth(parsedUser.id);
         } else {
           // If already authenticated and user data matches, just set initialized
           useCartStore.getState().setCartOwner(parsedUser.id);
           set({ isInitialized: true });
-          if (useCartStore.getState().getOwnerItems(parsedUser.id).length === 0) {
-            void syncCartAfterAuth(parsedUser.id);
-          }
+          void syncCartAfterAuth(parsedUser.id);
         }
       } catch (error) {
         console.error("Failed to parse user from localStorage", error);

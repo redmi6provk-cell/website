@@ -82,7 +82,7 @@ function parseDeliveryAddress(address?: string) {
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, clearCart } = useCartStore();
-  const { isAuthenticated, user, checkAuth, updateUser } = useAuthStore();
+  const { isAuthenticated, isInitialized, user, checkAuth, updateUser, logout } = useAuthStore();
 
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "qr">("cod");
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
@@ -147,7 +147,7 @@ export default function CheckoutPage() {
   }, [setValue, user]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isInitialized || !isAuthenticated) {
       return;
     }
 
@@ -178,6 +178,13 @@ export default function CheckoutPage() {
         setValue("city", user?.city || parsedAddress.city);
         setValue("state", user?.state || parsedAddress.state);
       } catch (err) {
+        const status = (err as AxiosError)?.response?.status;
+        if (status === 401) {
+          logout();
+          router.replace("/auth/login?redirect=/checkout");
+          return;
+        }
+
         console.error("Failed to auto-fill checkout details", err);
       }
     };
@@ -187,7 +194,7 @@ export default function CheckoutPage() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated, setValue, user]);
+  }, [isAuthenticated, isInitialized, logout, router, setValue, user]);
 
   const cartPricing = getCartPricing(items);
   const totalPrice = cartPricing.subtotal;
@@ -273,6 +280,12 @@ export default function CheckoutPage() {
       setIsOrdered(true);
       clearCart();
     } catch (err: unknown) {
+      if ((err as AxiosError)?.response?.status === 401) {
+        logout();
+        router.push("/auth/login?redirect=/checkout");
+        return;
+      }
+
       const message =
         (err as AxiosError<{ error?: string }>)?.response?.data?.error ||
         "Failed to place order. Please try again.";
@@ -400,7 +413,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 py-12">
-      <div className="container mx-auto px-4 pb-52 sm:px-6 lg:px-8 lg:pb-8">
+      <div className="container mx-auto px-4 pb-44 sm:px-6 lg:px-8 lg:pb-8">
         <div className="mb-8 flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.back()} leftIcon={ChevronLeft}>
             Back
@@ -719,18 +732,18 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-24 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
+      <div className="fixed inset-x-0 bottom-20 z-40 border-t border-zinc-200/80 bg-white/95 px-3 pb-2 pt-2 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
         <div className="mx-auto max-w-lg">
-          <div className="mb-3 flex items-end justify-between gap-4">
+          <div className="mb-2 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.24em] text-zinc-500">Place Order</p>
-              <p className="mt-1 text-2xl font-black tracking-tight text-zinc-900">Rs. {orderTotal}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Place Order</p>
+              <p className="mt-0.5 text-[1.75rem] leading-none font-black tracking-tight text-zinc-900">Rs. {orderTotal}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs font-semibold text-zinc-600">
+              <p className="text-[11px] font-semibold leading-none text-zinc-600">
                 {paymentMethod === "qr" ? "QR Payment" : "Cash on Delivery"}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-[11px] leading-tight text-zinc-500">
                 {deliveryMethod === "pickup" ? "Store pickup" : "Home delivery"}
               </p>
             </div>
@@ -739,7 +752,7 @@ export default function CheckoutPage() {
           <Button
             type="submit"
             form="checkout-form"
-            className="h-12 w-full rounded-2xl text-base font-black"
+            className="h-10 w-full rounded-xl text-sm font-semibold"
             isLoading={isLoading}
             disabled={!cartPricing.isValid}
           >

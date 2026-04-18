@@ -8,6 +8,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import ImageUploader from "@/components/ui/ImageUploader";
 import { 
   Plus, 
@@ -34,6 +35,7 @@ export default function CategoriesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [newCategory, setNewCategory] = useState({
     name: "",
@@ -78,6 +80,7 @@ export default function CategoriesPage() {
       }
       await fetchCategories();
       setIsModalOpen(false);
+      setSuccessMessage(editingCategoryId ? "Category updated successfully." : "Category created successfully.");
       setEditingCategoryId(null);
       setNewCategory({ name: "", description: "", image_url: "" });
     } catch (error) {
@@ -246,6 +249,12 @@ export default function CategoriesPage() {
                 </Button>
             </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

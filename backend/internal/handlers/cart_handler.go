@@ -133,7 +133,7 @@ func (h *CartHandler) SyncCart(c *gin.Context) {
 		Items []struct {
 			ProductID string `json:"product_id" binding:"required"`
 			Quantity  int    `json:"quantity" binding:"required,min=1"`
-		} `json:"items" binding:"required"`
+		} `json:"items"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

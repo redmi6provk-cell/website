@@ -8,6 +8,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import ImageUploader from "@/components/ui/ImageUploader";
 import { QuantityDiscount } from "@/types";
 import { formatDiscountLabel } from "@/lib/pricing";
@@ -103,6 +104,8 @@ const emptyDraft = (): ProductDraft => ({
 });
 
 export default function AdminProductsPage() {
+  const ADD_NEW_CATEGORY_VALUE = "__add_new_category__";
+  const ADD_NEW_BRAND_VALUE = "__add_new_brand__";
   const router = useRouter();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
@@ -114,6 +117,13 @@ export default function AdminProductsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showNewCategoryField, setShowNewCategoryField] = useState(false);
+  const [showNewBrandField, setShowNewBrandField] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
 
   const [newProduct, setNewProduct] = useState<ProductDraft>(emptyDraft());
 
@@ -212,6 +222,16 @@ export default function AdminProductsPage() {
     setFormError(null);
 
     try {
+      if (!newProduct.category_id) {
+        setFormError("Category select ya create karni zaroori hai.");
+        return;
+      }
+
+      if (!newProduct.brand_id) {
+        setFormError("Brand select ya create karna zaroori hai.");
+        return;
+      }
+
       const payload = buildProductPayload();
 
       if (editingProductId) {
@@ -221,6 +241,7 @@ export default function AdminProductsPage() {
       }
       await fetchData();
       setIsModalOpen(false);
+      setSuccessMessage(editingProductId ? "Product updated successfully." : "Product created successfully.");
       setEditingProductId(null);
       setNewProduct(emptyDraft());
     } catch (error) {
@@ -233,6 +254,10 @@ export default function AdminProductsPage() {
   const handleEdit = (product: Product) => {
     setEditingProductId(product.id);
     setFormError(null);
+    setShowNewCategoryField(false);
+    setShowNewBrandField(false);
+    setNewCategoryName("");
+    setNewBrandName("");
     setNewProduct({
       name: product.name,
       description: product.description || "",
@@ -254,6 +279,65 @@ export default function AdminProductsPage() {
           : emptyDraft().quantity_discounts,
     });
     setIsModalOpen(true);
+  };
+
+  const handleCreateCategory = async () => {
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedName) {
+      setFormError("Category name required hai.");
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    setFormError(null);
+    try {
+      const res = await api.post("/admin/categories", {
+        name: trimmedName,
+        description: "",
+        image_url: "",
+      });
+      const createdCategory = res.data.data;
+      await fetchData();
+      setNewProduct((current) => ({
+        ...current,
+        category_id: createdCategory?.id || current.category_id,
+      }));
+      setShowNewCategoryField(false);
+      setNewCategoryName("");
+    } catch (error) {
+      setFormError(getApiErrorMessage(error, "New category save nahi ho paayi."));
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleCreateBrand = async () => {
+    const trimmedName = newBrandName.trim();
+    if (!trimmedName) {
+      setFormError("Brand name required hai.");
+      return;
+    }
+
+    setIsCreatingBrand(true);
+    setFormError(null);
+    try {
+      const res = await api.post("/admin/brands", {
+        name: trimmedName,
+        logo_url: "",
+      });
+      const createdBrand = res.data.data;
+      await fetchData();
+      setNewProduct((current) => ({
+        ...current,
+        brand_id: createdBrand?.id || current.brand_id,
+      }));
+      setShowNewBrandField(false);
+      setNewBrandName("");
+    } catch (error) {
+      setFormError(getApiErrorMessage(error, "New brand save nahi ho paaya."));
+    } finally {
+      setIsCreatingBrand(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -303,7 +387,16 @@ export default function AdminProductsPage() {
             </div>
           </div>
           <Button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setIsModalOpen(true);
+              setEditingProductId(null);
+              setFormError(null);
+              setShowNewCategoryField(false);
+              setShowNewBrandField(false);
+              setNewCategoryName("");
+              setNewBrandName("");
+              setNewProduct(emptyDraft());
+            }}
             className="h-14 w-full rounded-2xl bg-zinc-900 px-8 font-bold text-white transition-all hover:bg-zinc-800 md:w-auto"
           >
             <Plus className="mr-3 h-5 w-5" /> Add New Product
@@ -535,6 +628,10 @@ export default function AdminProductsPage() {
             setIsModalOpen(false);
             setEditingProductId(null);
             setFormError(null);
+            setShowNewCategoryField(false);
+            setShowNewBrandField(false);
+            setNewCategoryName("");
+            setNewBrandName("");
             setNewProduct(emptyDraft());
           }}
           title={editingProductId ? "Edit Product" : "Add Product"}
@@ -573,8 +670,17 @@ export default function AdminProductsPage() {
               <label className="mb-2 block text-xs font-black uppercase tracking-widest text-zinc-400">Category</label>
               <select
                 required
-                value={newProduct.category_id}
-                onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
+                value={showNewCategoryField ? ADD_NEW_CATEGORY_VALUE : newProduct.category_id}
+                onChange={(e) => {
+                  if (e.target.value === ADD_NEW_CATEGORY_VALUE) {
+                    setShowNewCategoryField(true);
+                    setNewProduct({ ...newProduct, category_id: "" });
+                    return;
+                  }
+                  setShowNewCategoryField(false);
+                  setNewCategoryName("");
+                  setNewProduct({ ...newProduct, category_id: e.target.value });
+                }}
                 className="h-14 w-full rounded-2xl border border-zinc-100 bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-all focus:ring-2 focus:ring-green-500"
               >
                 <option value="">Select Category</option>
@@ -583,15 +689,38 @@ export default function AdminProductsPage() {
                     {c.name}
                   </option>
                 ))}
+                <option value={ADD_NEW_CATEGORY_VALUE}>+ Add new category</option>
               </select>
+              {showNewCategoryField && (
+                <div className="mt-3 flex gap-2">
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="New category name"
+                    className="h-12 rounded-2xl"
+                  />
+                  <Button type="button" onClick={handleCreateCategory} isLoading={isCreatingCategory} className="h-12 rounded-2xl px-4">
+                    Save
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>
               <label className="mb-2 block text-xs font-black uppercase tracking-widest text-zinc-400">Brand</label>
               <select
                 required
-                value={newProduct.brand_id}
-                onChange={(e) => setNewProduct({ ...newProduct, brand_id: e.target.value })}
+                value={showNewBrandField ? ADD_NEW_BRAND_VALUE : newProduct.brand_id}
+                onChange={(e) => {
+                  if (e.target.value === ADD_NEW_BRAND_VALUE) {
+                    setShowNewBrandField(true);
+                    setNewProduct({ ...newProduct, brand_id: "" });
+                    return;
+                  }
+                  setShowNewBrandField(false);
+                  setNewBrandName("");
+                  setNewProduct({ ...newProduct, brand_id: e.target.value });
+                }}
                 className="h-14 w-full rounded-2xl border border-zinc-100 bg-white px-4 text-sm font-medium text-zinc-900 outline-none transition-all focus:ring-2 focus:ring-green-500"
               >
                 <option value="">Select Brand</option>
@@ -600,7 +729,21 @@ export default function AdminProductsPage() {
                     {b.name}
                   </option>
                 ))}
+                <option value={ADD_NEW_BRAND_VALUE}>+ Add new brand</option>
               </select>
+              {showNewBrandField && (
+                <div className="mt-3 flex gap-2">
+                  <Input
+                    value={newBrandName}
+                    onChange={(e) => setNewBrandName(e.target.value)}
+                    placeholder="New brand name"
+                    className="h-12 rounded-2xl"
+                  />
+                  <Button type="button" onClick={handleCreateBrand} isLoading={isCreatingBrand} className="h-12 rounded-2xl px-4">
+                    Save
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -657,6 +800,7 @@ export default function AdminProductsPage() {
                   onUploaded={(url) => setNewProduct({ ...newProduct, image_url: url })}
                 />
               </div>
+              
             </div>
 
             <div>
@@ -767,6 +911,12 @@ export default function AdminProductsPage() {
             </div>
           </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

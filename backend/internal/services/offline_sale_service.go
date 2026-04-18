@@ -12,12 +12,13 @@ import (
 type OfflineSaleService struct {
 	repo         *repository.OfflineSaleRepository
 	invoiceRepo  *repository.InvoiceSequenceRepository
+	arpRepo      *repository.ARPRepository
 	settingsRepo repository.SettingsRepository
 	financeRepo  *repository.FinanceTransactionRepository
 }
 
-func NewOfflineSaleService(repo *repository.OfflineSaleRepository, invoiceRepo *repository.InvoiceSequenceRepository, settingsRepo repository.SettingsRepository, financeRepo *repository.FinanceTransactionRepository) *OfflineSaleService {
-	return &OfflineSaleService{repo: repo, invoiceRepo: invoiceRepo, settingsRepo: settingsRepo, financeRepo: financeRepo}
+func NewOfflineSaleService(repo *repository.OfflineSaleRepository, invoiceRepo *repository.InvoiceSequenceRepository, arpRepo *repository.ARPRepository, settingsRepo repository.SettingsRepository, financeRepo *repository.FinanceTransactionRepository) *OfflineSaleService {
+	return &OfflineSaleService{repo: repo, invoiceRepo: invoiceRepo, arpRepo: arpRepo, settingsRepo: settingsRepo, financeRepo: financeRepo}
 }
 
 func (s *OfflineSaleService) GetAll() ([]models.OfflineSale, error) {
@@ -117,6 +118,11 @@ func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill boo
 	if sale.CustomerName == "" {
 		sale.CustomerName = "Walk-in Customer"
 	}
+	if sale.CustomerPartyID == nil && s.arpRepo != nil && sale.CustomerPhone != "" {
+		if party, err := s.arpRepo.FindPartyByPhone(sale.CustomerPhone); err == nil && strings.EqualFold(party.Type, "customer") {
+			sale.CustomerPartyID = &party.PartyID
+		}
+	}
 	if sale.SaleDate.IsZero() {
 		return errors.New("sale date is required")
 	}
@@ -170,16 +176,6 @@ func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill boo
 	sale.Subtotal = subtotal
 	sale.DiscountTotal = discountTotal
 	sale.FinalTotal = subtotal - discountTotal
-	if sale.AmountReceived == 0 {
-		switch strings.ToLower(sale.PaymentMode) {
-		case "cash", "card", "upi":
-			sale.AmountReceived = sale.FinalTotal
-		default:
-			if sale.PaymentMode != "" && sale.PaymentMode != "credit" && sale.PaymentMode != "mixed" {
-				sale.AmountReceived = sale.FinalTotal
-			}
-		}
-	}
 	if sale.AmountReceived < 0 {
 		return errors.New("amount received cannot be negative")
 	}
@@ -211,6 +207,18 @@ func (s *OfflineSaleService) syncFinanceTransaction(sale *models.OfflineSale) er
 		remarks = "Offline sale collection"
 	}
 
+	partyID := ""
+	if sale.CustomerPartyID != nil {
+		partyID = sale.CustomerPartyID.String()
+	} else if s.arpRepo != nil {
+		phone := strings.TrimSpace(sale.CustomerPhone)
+		if phone != "" {
+			if party, err := s.arpRepo.FindPartyByPhone(phone); err == nil {
+				partyID = party.PartyID.String()
+			}
+		}
+	}
+
 	return s.financeRepo.Replace(&models.FinanceTransaction{
 		SourceModule:    "offline_sale",
 		SourceID:        sale.ID.String(),
@@ -220,6 +228,7 @@ func (s *OfflineSaleService) syncFinanceTransaction(sale *models.OfflineSale) er
 		Amount:          sale.AmountReceived,
 		ReferenceID:     sale.ID.String(),
 		ReferenceLabel:  sale.BillNumber,
+		PartyID:         partyID,
 		PartyName:       sale.CustomerName,
 		PartyType:       "customer",
 		Remarks:         remarks,

@@ -6,6 +6,7 @@ import { CalendarDays, ChevronLeft, Landmark, Wallet } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
 import { Button } from "@/components/ui/Button";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import api from "@/lib/api";
 import type { AxiosError } from "axios";
 
@@ -104,6 +105,7 @@ export default function AdminExpensesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paymentOptions, setPaymentOptions] = useState<string[]>(["cash"]);
   const [loading, setLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -215,6 +217,7 @@ export default function AdminExpensesPage() {
 
       const expensesRes = await api.get("/admin/expenses");
       setExpenses((expensesRes.data.data || []).map(normalizeExpense));
+      setSuccessMessage(editingId ? "Expense updated successfully." : "Expense saved successfully.");
       resetForm();
     } catch (error: unknown) {
       const message =
@@ -387,6 +390,12 @@ export default function AdminExpensesPage() {
             </form>
           </section>
         </div>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

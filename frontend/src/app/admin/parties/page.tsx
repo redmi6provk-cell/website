@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessERP } from "@/lib/roles";
 import api from "@/lib/api";
-import { 
+import {
+  ChevronRight,
   Mail, 
   Phone, 
   Search,
@@ -17,6 +18,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 
 interface Contact {
   contact_type: string;
@@ -26,19 +28,31 @@ interface Contact {
 interface Party {
   party_id: string;
   name: string;
+  shop_name?: string;
   type: string;
   created_at: string;
   contacts?: Contact[];
+}
+
+interface LedgerEntry {
+  party_id: string;
+  party_name: string;
+  party_type: string;
+  total_invoiced: number;
+  total_paid: number;
+  outstanding_balance: number;
 }
 
 export default function PartiesPage() {
   const router = useRouter();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
   const [parties, setParties] = useState<Party[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // For editing
   const [editingParty, setEditingParty] = useState<Party | null>(null);
@@ -46,6 +60,7 @@ export default function PartiesPage() {
   // Form states
   const [formData, setFormData] = useState({
     name: "",
+    shop_name: "",
     type: "customer",
     phone: "",
     email: ""
@@ -68,8 +83,12 @@ export default function PartiesPage() {
 
   const fetchParties = async () => {
     try {
-      const res = await api.get("/admin/arp/parties");
-      setParties(res.data.data || []);
+      const [partiesRes, ledgerRes] = await Promise.all([
+        api.get("/admin/arp/parties"),
+        api.get("/admin/arp/ledger"),
+      ]);
+      setParties(partiesRes.data.data || []);
+      setLedger(ledgerRes.data.data || []);
     } catch {
       console.error("Failed to fetch parties");
     } finally {
@@ -79,7 +98,7 @@ export default function PartiesPage() {
 
   const handleOpenAdd = () => {
     setEditingParty(null);
-    setFormData({ name: "", type: "customer", phone: "", email: "" });
+    setFormData({ name: "", shop_name: "", type: "customer", phone: "", email: "" });
     setIsModalOpen(true);
   };
 
@@ -87,6 +106,7 @@ export default function PartiesPage() {
     setEditingParty(party);
     setFormData({
         name: party.name,
+        shop_name: party.shop_name || "",
         type: party.type,
         phone: party.contacts?.find(c => c.contact_type === 'phone')?.contact_value || "",
         email: party.contacts?.find(c => c.contact_type === 'email')?.contact_value || ""
@@ -101,6 +121,7 @@ export default function PartiesPage() {
       if (editingParty) {
         await api.put(`/admin/arp/parties/${editingParty.party_id}`, {
             name: formData.name,
+            shop_name: formData.shop_name,
             type: formData.type,
             contacts: [
                 { contact_type: "phone", contact_value: formData.phone },
@@ -110,6 +131,7 @@ export default function PartiesPage() {
       } else {
           const payload = {
             name: formData.name,
+            shop_name: formData.shop_name,
             type: formData.type,
             contacts: [
                 { contact_type: "phone", contact_value: formData.phone },
@@ -121,6 +143,7 @@ export default function PartiesPage() {
       
       await fetchParties();
       setIsModalOpen(false);
+      setSuccessMessage(editingParty ? "Party updated successfully." : "Party created successfully.");
     } catch {
       alert("Failed to save party. Please check logs.");
     } finally {
@@ -139,7 +162,14 @@ export default function PartiesPage() {
   };
 
   const filteredParties = parties.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    [
+      p.name,
+      p.shop_name,
+      p.contacts?.find(c => c.contact_type === "phone")?.contact_value,
+      p.contacts?.find(c => c.contact_type === "email")?.contact_value,
+    ]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (!isInitialized || loading) return <div className="p-12 text-center text-zinc-400 font-bold uppercase tracking-widest animate-pulse">Loading Parties Master...</div>;
@@ -194,12 +224,16 @@ export default function PartiesPage() {
                             <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Party</th>
                             <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Type</th>
                             <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Contact</th>
+                            <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Ledger Snapshot</th>
                             <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Created</th>
                             <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-50">
-                        {filteredParties.map((party) => (
+                        {filteredParties.map((party) => {
+                            const ledgerEntry = ledger.find((entry) => entry.party_id === party.party_id);
+
+                            return (
                             <tr key={party.party_id} className="hover:bg-zinc-50/50 transition-all">
                                 <td className="px-8 py-6">
                                     <div className="flex items-center gap-4">
@@ -208,7 +242,10 @@ export default function PartiesPage() {
                                         }`}>
                                             {party.name[0].toUpperCase()}
                                         </div>
-                                        <span className="font-bold text-zinc-900 uppercase tracking-tight">{party.name}</span>
+                                        <div>
+                                            <span className="font-bold text-zinc-900 uppercase tracking-tight">{party.name}</span>
+                                            {party.shop_name ? <p className="mt-1 text-xs font-medium text-zinc-400">{party.shop_name}</p> : null}
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="px-8 py-6">
@@ -230,11 +267,42 @@ export default function PartiesPage() {
                                         </div>
                                     </div>
                                 </td>
+                                <td className="px-8 py-6">
+                                    <div className="min-w-[220px] rounded-[1.25rem] border border-zinc-100 bg-zinc-50/70 p-4">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Invoiced</p>
+                                                <p className="mt-2 text-sm font-black text-zinc-900">
+                                                    Rs {(ledgerEntry?.total_invoiced || 0).toLocaleString("en-IN")}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Paid</p>
+                                                <p className="mt-2 text-sm font-black text-emerald-600">
+                                                    Rs {(ledgerEntry?.total_paid || 0).toLocaleString("en-IN")}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Outstanding</p>
+                                                <p className={`mt-2 text-sm font-black ${(ledgerEntry?.outstanding_balance || 0) > 0 ? "text-red-500" : "text-zinc-400"}`}>
+                                                    Rs {(ledgerEntry?.outstanding_balance || 0).toLocaleString("en-IN")}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td className="px-8 py-6 text-xs font-bold text-zinc-400 uppercase">
                                     {new Date(party.created_at).toLocaleDateString()}
                                 </td>
                                 <td className="px-8 py-6 text-right">
                                     <div className="flex items-center justify-end gap-2">
+                                        <Button
+                                            onClick={() => router.push(`/admin/arp/ledger/${party.party_id}`)}
+                                            variant="ghost"
+                                            className="h-10 w-10 p-0 rounded-xl text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
                                         <Button 
                                             onClick={() => handleOpenEdit(party)}
                                             variant="ghost" 
@@ -252,7 +320,7 @@ export default function PartiesPage() {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                        )})}
                     </tbody>
                 </table>
             </div>
@@ -278,6 +346,15 @@ export default function PartiesPage() {
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="ABC Enterprises"
+                        className="h-14 rounded-2xl"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Shop Name</label>
+                    <Input 
+                        value={formData.shop_name}
+                        onChange={(e) => setFormData({...formData, shop_name: e.target.value})}
+                        placeholder="Optional shop name"
                         className="h-14 rounded-2xl"
                     />
                 </div>
@@ -334,6 +411,12 @@ export default function PartiesPage() {
                 </Button>
             </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 
 interface Transaction {
   date: string;
@@ -38,6 +39,10 @@ interface InvoiceProgress {
   paid: number;
   remaining: number;
   status: "unpaid" | "partially_paid" | "paid";
+}
+
+interface InvoiceRowProgress extends InvoiceProgress {
+  key: string;
 }
 
 type BankAccount = {
@@ -73,6 +78,7 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Transaction | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     payment_mode: "cash",
@@ -161,8 +167,16 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
 
       setIsInvoiceModalOpen(false);
       await fetchLedger();
-    } catch (error: any) {
-      alert(error?.response?.data?.error || "Failed to create invoice.");
+      setSuccessMessage("Invoice created successfully.");
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        (error as { response?: { data?: { error?: string } } }).response?.data?.error
+          ? (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to create invoice."
+          : "Failed to create invoice.";
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -175,33 +189,80 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
     return acc;
   }, {});
 
-  const invoiceProgress = transactions.reduce<Record<string, InvoiceProgress>>((acc, transaction) => {
-    if (transaction.type === "invoice" && transaction.invoice_id) {
-      acc[transaction.invoice_id] = {
-        paid: 0,
-        remaining: transaction.amount,
-        status: "unpaid",
-      };
-    }
+  const invoiceProgressByRow = (() => {
+    const progressMap: Record<string, InvoiceRowProgress> = {};
+    const openInvoices: Array<{ key: string; invoice_id?: string; remaining: number }> = [];
 
-    if (transaction.type === "payment" && transaction.invoice_id && acc[transaction.invoice_id]) {
-      const total = invoiceTotals[transaction.invoice_id] ?? 0;
-      const paid = acc[transaction.invoice_id].paid + transaction.amount;
-      const remaining = Math.max(0, total - paid);
-      acc[transaction.invoice_id] = {
-        paid,
-        remaining,
-        status: remaining === 0 ? "paid" : "partially_paid",
-      };
-    }
+    transactions.forEach((transaction, index) => {
+      const rowKey = `${transaction.type}-${transaction.invoice_id || transaction.ref_id}-${index}`;
 
-    return acc;
-  }, {});
+      if (transaction.type === "invoice") {
+        progressMap[rowKey] = {
+          key: rowKey,
+          paid: 0,
+          remaining: transaction.amount,
+          status: "unpaid",
+        };
+        openInvoices.push({
+          key: rowKey,
+          invoice_id: transaction.invoice_id,
+          remaining: transaction.amount,
+        });
+        return;
+      }
 
-  const handleOpenPayment = (invoice: Transaction) => {
-    const progress = invoice.invoice_id ? invoiceProgress[invoice.invoice_id] : undefined;
-    const remaining = progress?.remaining ?? invoice.amount;
+      if (transaction.type !== "payment") {
+        return;
+      }
 
+      let remainingPayment = transaction.amount;
+
+      if (transaction.invoice_id) {
+        const linkedInvoice = openInvoices.find((invoice) => invoice.invoice_id === transaction.invoice_id);
+        if (linkedInvoice && progressMap[linkedInvoice.key]) {
+          const applied = Math.min(linkedInvoice.remaining, remainingPayment);
+          linkedInvoice.remaining -= applied;
+          remainingPayment -= applied;
+          const paid = (invoiceTotals[transaction.invoice_id] ?? 0) - linkedInvoice.remaining;
+          progressMap[linkedInvoice.key] = {
+            key: linkedInvoice.key,
+            paid,
+            remaining: linkedInvoice.remaining,
+            status: linkedInvoice.remaining === 0 ? "paid" : "partially_paid",
+          };
+        }
+      }
+
+      if (remainingPayment <= 0) {
+        return;
+      }
+
+      for (const invoice of openInvoices) {
+        if (remainingPayment <= 0) {
+          break;
+        }
+        if (invoice.remaining <= 0) {
+          continue;
+        }
+
+        const applied = Math.min(invoice.remaining, remainingPayment);
+        invoice.remaining -= applied;
+        remainingPayment -= applied;
+        const originalAmount = progressMap[invoice.key]?.paid + progressMap[invoice.key]?.remaining || 0;
+        const paid = originalAmount - invoice.remaining;
+        progressMap[invoice.key] = {
+          key: invoice.key,
+          paid,
+          remaining: invoice.remaining,
+          status: invoice.remaining === 0 ? "paid" : "partially_paid",
+        };
+      }
+    });
+
+    return progressMap;
+  })();
+
+  const handleOpenPayment = (invoice: Transaction, remaining: number) => {
     setSelectedInvoice(invoice);
     setPaymentForm({
       amount: remaining.toString(),
@@ -227,8 +288,16 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
 
       setIsPaymentModalOpen(false);
       await fetchLedger();
-    } catch (error: any) {
-      alert(error?.response?.data?.error || "Failed to record payment.");
+      setSuccessMessage("Payment recorded successfully.");
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        (error as { response?: { data?: { error?: string } } }).response?.data?.error
+          ? (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to record payment."
+          : "Failed to record payment.";
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -450,7 +519,8 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
               </thead>
               <tbody className="divide-y divide-zinc-50">
                 {filteredTransactions.map((transaction, index) => {
-                  const progress = transaction.invoice_id ? invoiceProgress[transaction.invoice_id] : undefined;
+                  const rowKey = `${transaction.type}-${transaction.invoice_id || transaction.ref_id}-${index}`;
+                  const progress = transaction.type === "invoice" ? invoiceProgressByRow[rowKey] : undefined;
                   const invoiceStatus = progress?.status || "unpaid";
                   const remainingAmount = progress?.remaining ?? transaction.amount;
 
@@ -509,7 +579,7 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
                           </span>
                           {transaction.type === "invoice" && transaction.invoice_id && remainingAmount > 0 && (
                             <Button
-                              onClick={() => handleOpenPayment(transaction)}
+                              onClick={() => handleOpenPayment(transaction, remainingAmount)}
                               variant="outline"
                               className="h-8 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest border-zinc-200 text-zinc-500 hover:text-green-600 hover:border-green-600 hover:bg-green-50"
                             >
@@ -655,6 +725,12 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
             </Button>
           </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

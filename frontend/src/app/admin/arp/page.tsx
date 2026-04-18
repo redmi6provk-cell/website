@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/authStore";
-import { canAccessERP } from "@/lib/roles";
-import api from "@/lib/api";
-import { 
-  BarChart3, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Users, 
-  ChevronRight,
-  Search,
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  BarChart3,
+  Landmark,
   RefreshCcw,
-  BookOpen
+  Search,
+  Users,
+  Wallet,
 } from "lucide-react";
+import api from "@/lib/api";
+import { canAccessERP } from "@/lib/roles";
 import { Button } from "@/components/ui/Button";
+import { PageLoader } from "@/components/ui/PageLoader";
+import { useAuthStore } from "@/store/authStore";
 
 interface Summary {
   total_receivable: number;
@@ -24,31 +25,67 @@ interface Summary {
   bank_accounts: { name: string; balance: number }[];
 }
 
-interface LedgerEntry {
+interface PaymentModeTransaction {
+  payment_id: string;
+  payment_date: string;
+  amount: number;
+  payment_mode: string;
+  remarks: string;
+  reference_id: string;
+  reference_label: string;
   party_id: string;
   party_name: string;
   party_type: string;
-  total_invoiced: number;
-  total_paid: number;
-  outstanding_balance: number;
+  source_module: string;
+  direction: string;
 }
 
 function formatCurrency(value: number) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
+function formatPaymentModeLabel(value: string) {
+  return value.trim().replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatSourceLabel(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatTransactionDate(value: string) {
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response;
+    if (response?.data?.error) {
+      return response.data.error;
+    }
+  }
+  return fallback;
+}
+
 export default function ARPDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
+
   const [summary, setSummary] = useState<Summary>({
     total_receivable: 0,
     total_payable: 0,
     cash_total: 0,
     bank_accounts: [],
   });
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [transactions, setTransactions] = useState<PaymentModeTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -67,214 +104,283 @@ export default function ARPDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const [sumRes, ledRes] = await Promise.all([
-        api.get("/admin/arp/summary"),
-        api.get("/admin/arp/ledger")
-      ]);
-      setSummary(sumRes.data.data || {
-        total_receivable: 0,
-        total_payable: 0,
-        cash_total: 0,
-        bank_accounts: [],
-      });
-      setLedger(ledRes.data.data || []);
-    } catch {
-      console.error("Failed to fetch ARP data");
+      const sumRes = await api.get("/admin/arp/summary");
+      setSummary(
+        sumRes.data.data || {
+          total_receivable: 0,
+          total_payable: 0,
+          cash_total: 0,
+          bank_accounts: [],
+        }
+      );
+    } catch (fetchError) {
+      setError(getApiErrorMessage(fetchError, "ARP summary load nahi ho pa raha hai."));
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredLedger = ledger.filter(entry => 
-    entry.party_name.toLowerCase().includes(searchTerm.toLowerCase())
+  const paymentModeCards = useMemo(
+    () => [
+      { label: "Cash", value: summary.cash_total, tone: "bg-emerald-50 text-emerald-700", mode: "cash" },
+      ...summary.bank_accounts.map((account, index) => ({
+        label: account.name.trim(),
+        value: account.balance,
+        tone: index % 2 === 0 ? "bg-blue-50 text-blue-700" : "bg-cyan-50 text-cyan-700",
+        mode: account.name.trim(),
+      })),
+    ],
+    [summary]
   );
 
-  const paymentModeCards = [
-    { label: "Cash", value: summary.cash_total, tone: "bg-emerald-50 text-emerald-700", mode: "cash" },
-    ...summary.bank_accounts.map((account, index) => ({
-      label: account.name.trim(),
-      value: account.balance,
-      tone: index % 2 === 0 ? "bg-blue-50 text-blue-700" : "bg-cyan-50 text-cyan-700",
-      mode: account.name.trim(),
-    })),
-  ];
+  const selectedMode = useMemo(() => {
+    const queryMode = searchParams.get("mode")?.trim();
+    if (queryMode) {
+      return queryMode;
+    }
+    return paymentModeCards[0]?.mode || "cash";
+  }, [paymentModeCards, searchParams]);
+
+  useEffect(() => {
+    if (!selectedMode || !isInitialized || !isAuthenticated || !user || !canAccessERP(user.role)) {
+      return;
+    }
+
+    const fetchTransactions = async () => {
+      setIsTransactionsLoading(true);
+      setError(null);
+      try {
+        const res = await api.get(`/admin/arp/payment-transactions?mode=${encodeURIComponent(selectedMode)}`);
+        setTransactions(res.data.data || []);
+      } catch (fetchError) {
+        setTransactions([]);
+        setError(getApiErrorMessage(fetchError, "Transactions load nahi ho rahi hain."));
+      } finally {
+        setIsTransactionsLoading(false);
+      }
+    };
+
+    void fetchTransactions();
+  }, [selectedMode, isInitialized, isAuthenticated, user]);
+
+  const filteredTransactions = transactions.filter((transaction) => {
+    const value = transactionSearch.toLowerCase();
+    return (
+      !value ||
+      (transaction.party_name || "").toLowerCase().includes(value) ||
+      (transaction.reference_label || "").toLowerCase().includes(value) ||
+      (transaction.reference_id || "").toLowerCase().includes(value) ||
+      (transaction.remarks || "").toLowerCase().includes(value) ||
+      formatSourceLabel(transaction.source_module).toLowerCase().includes(value)
+    );
+  });
+
+  const selectedModeBalance =
+    paymentModeCards.find((item) => item.mode.toLowerCase() === selectedMode.toLowerCase())?.value || 0;
 
   const handleOpenPaymentMode = (mode: string) => {
-    router.push(`/admin/arp/payment-modes?mode=${encodeURIComponent(mode)}`);
+    router.push(`/admin/arp?mode=${encodeURIComponent(mode)}`);
   };
 
-  if (!isInitialized || loading) return <div className="p-12 text-center font-black uppercase tracking-widest text-zinc-400 animate-pulse">Initializing Financial Core...</div>;
+  if (!isInitialized || loading) {
+    return (
+      <PageLoader
+        compact
+        title="Initializing Financial Core"
+        subtitle="Receivables aur payables data fetch ho raha hai."
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 py-12">
-      <div className="container mx-auto px-4 max-w-7xl">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-            <div>
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="h-10 w-10 bg-zinc-900 rounded-xl flex items-center justify-center">
-                        <BarChart3 className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">FINANCIAL INTELLIGENCE</span>
-                </div>
-                <h1 className="text-5xl font-black tracking-tighter text-zinc-900 uppercase">ERP DASHBOARD</h1>
-                <p className="text-zinc-500 font-medium mt-2">Monitor your business cash flow, receivables, and payables in real-time.</p>
-            </div>
-            <div className="flex gap-3">
-                <Button onClick={fetchData} variant="outline" className="rounded-2xl h-14 w-14 p-0 border-zinc-200">
-                    <RefreshCcw className="h-5 w-5 text-zinc-400" />
-                </Button>
-                <Button onClick={() => router.push("/admin/parties")} className="rounded-2xl h-14 px-8 bg-zinc-900 text-white font-bold uppercase tracking-widest text-xs">
-                    <Users className="h-5 w-5 mr-3" /> Manage Parties
-                </Button>
-            </div>
+      <div className="container mx-auto max-w-[1600px] px-4">
+        <div className="mb-12 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div>
+           
+            
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={fetchData} variant="outline" className="h-14 w-14 rounded-2xl border-zinc-200 p-0">
+              <RefreshCcw className="h-5 w-5 text-zinc-400" />
+            </Button>
+           
+          </div>
         </div>
 
-        {/* Top Stats */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mb-12">
-            {/* Receivable */}
-            <div className="bg-white rounded-[2.5rem] p-8 border border-zinc-100 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8">
-                    <ArrowUpRight className="h-8 w-8 text-green-100 transition-colors group-hover:text-green-500" />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Total Receivables</p>
-                <h2 className="text-4xl font-black text-zinc-900">₹{summary.total_receivable?.toLocaleString() || 0}</h2>
-                <div className="mt-6 flex items-center gap-2">
-                    <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-black uppercase">Due from Customers</span>
-                </div>
-            </div>
+        {error ? (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        ) : null}
 
-            {/* Payable */}
-            <div className="bg-white rounded-[2.5rem] p-8 border border-zinc-100 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8">
-                    <ArrowDownLeft className="h-8 w-8 text-red-100 transition-colors group-hover:text-red-500" />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Total Payables</p>
-                <h2 className="text-4xl font-black text-zinc-900">₹{summary.total_payable?.toLocaleString() || 0}</h2>
-                <div className="mt-6 flex items-center gap-2">
-                    <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[10px] font-black uppercase">Due to Suppliers</span>
-                </div>
-            </div>
+       
 
-            {/* Net Balance */}
-            <div className="bg-zinc-900 rounded-[2.5rem] p-8 border border-zinc-800 shadow-xl relative overflow-hidden">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Net Balance</p>
-                <h2 className="text-4xl font-black text-white">₹{(summary.total_receivable - summary.total_payable).toLocaleString()}</h2>
-                <div className="mt-6 flex items-center gap-2">
-                    <span className="px-3 py-1 bg-white/10 text-white rounded-full text-[10px] font-black uppercase">Overall Position</span>
-                </div>
+        <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
+            <div className="border-b border-zinc-100 px-4 py-4">
+              <h3 className="text-2xl font-black uppercase tracking-tight text-zinc-700">Payment Mode Overview</h3>
+              <p className="mt-2 text-sm font-medium text-zinc-500">
+                Left sidebar se mode select karo, right side me full ledger transactions dikhenge.
+              </p>
             </div>
-        </div>
-
-        <div className="mb-12 rounded-[2.5rem] border border-zinc-100 bg-white p-8 shadow-sm">
-            <div className="mb-6">
-                <h3 className="text-2xl font-black uppercase tracking-tight text-zinc-900">Payment Mode Overview</h3>
-                <p className="mt-2 text-sm font-medium text-zinc-500">Kisi bhi mode par click karke uski saari payment transactions dekh sakte ho.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {paymentModeCards.map((item) => (
-                    <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => handleOpenPaymentMode(item.mode)}
-                        className="rounded-[1.75rem] border border-zinc-100 bg-zinc-50/70 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white"
+            <div className="max-h-[70vh] overflow-y-auto">
+              {paymentModeCards.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handleOpenPaymentMode(item.mode)}
+                  className={`flex w-full items-center justify-between gap-3 border-b border-zinc-100 px-4 py-4 text-left transition ${
+                    item.mode.toLowerCase() === selectedMode.toLowerCase()
+                      ? "bg-sky-100/70"
+                      : "hover:bg-zinc-50"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div
+                      className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${item.tone}`}
                     >
-                        <div className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${item.tone}`}>
-                            {item.label}
-                        </div>
-                        <div className="mt-4 text-3xl font-black tracking-tight text-zinc-900">
-                            {formatCurrency(item.value)}
-                        </div>
-                        <div className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-zinc-400">Click To View Transactions</div>
-                    </button>
-                ))}
+                      {item.label}
+                    </div>
+                    <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                      {item.mode.toLowerCase() === "cash" ? "Cash Mode" : "Bank Account"}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-sm font-black text-zinc-900">{formatCurrency(item.value)}</div>
+                </button>
+              ))}
             </div>
             {summary.bank_accounts.length === 0 && (
-                <div className="mt-4 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                    Bank cards dikhane ke liye settings me bank account add karo.
-                </div>
+              <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                Bank cards dikhane ke liye settings me bank account add karo.
+              </div>
             )}
-        </div>
+          </aside>
 
-        {/* Ledger Table */}
-        <div className="bg-white rounded-[3rem] border border-zinc-100 shadow-sm overflow-hidden">
-            <div className="p-10 border-b border-zinc-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <section className="overflow-hidden rounded-[2.5rem] border border-zinc-200 bg-white shadow-sm">
+            <div className="border-b border-zinc-100 px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700">
+                  {selectedMode.toLowerCase() === "cash" ? <Wallet className="h-5 w-5" /> : <Landmark className="h-5 w-5" />}
+                </div>
                 <div>
-                    <h3 className="text-2xl font-black text-zinc-900 uppercase">Party-wise Ledger</h3>
-                    <p className="text-zinc-400 font-medium text-sm">Detailed outstanding balance for each customer and supplier.</p>
+                  <h2 className="text-xl font-black text-zinc-900">{formatPaymentModeLabel(selectedMode)}</h2>
+                  <p className="mt-1 text-sm text-zinc-500">Transactions ledger</p>
                 </div>
-                <div className="relative w-full md:w-96">
-                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Search party..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-16 pr-6 h-14 bg-zinc-50 border-none rounded-2xl text-zinc-900 font-medium focus:ring-2 focus:ring-zinc-900 outline-none transition-all"
-                    />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-right">
+                  <div className="text-[10px] font-black uppercase tracking-[0.22em] text-red-400">Active Balance</div>
+                  <div className="mt-1 text-lg font-black text-zinc-900">{formatCurrency(selectedModeBalance)}</div>
                 </div>
+                <div className="relative min-w-0 flex-1 sm:min-w-[280px]">
+                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={transactionSearch}
+                    onChange={(event) => setTransactionSearch(event.target.value)}
+                    placeholder="Search reference, party, remarks"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-zinc-900"
+                  />
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">
+                  {filteredTransactions.length} entries
+                </div>
+              </div>
+            </div>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead>
-                        <tr className="bg-zinc-50/50">
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Party</th>
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Type</th>
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Invoiced</th>
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Paid</th>
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Outstanding</th>
-                            <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-50">
-                        {filteredLedger.map((entry) => (
-                            <tr key={entry.party_id} className="group hover:bg-zinc-50/50 transition-all cursor-pointer" onClick={() => router.push(`/admin/arp/ledger/${entry.party_id}`)}>
-                                <td className="px-10 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center font-black text-lg ${
-                                            entry.party_type === 'customer' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
-                                        }`}>
-                                            {entry.party_name[0].toUpperCase()}
-                                        </div>
-                                        <span className="font-bold text-zinc-900 group-hover:text-zinc-600 uppercase">{entry.party_name}</span>
-                                    </div>
-                                </td>
-                                <td className="px-10 py-6">
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                        entry.party_type === 'customer' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
-                                    }`}>
-                                        {entry.party_type}
-                                    </span>
-                                </td>
-                                <td className="px-10 py-6 font-bold text-zinc-900">₹{entry.total_invoiced.toLocaleString()}</td>
-                                <td className="px-10 py-6 font-bold text-green-600">₹{entry.total_paid.toLocaleString()}</td>
-                                <td className="px-10 py-6">
-                                    <span className={`font-black text-lg ${entry.outstanding_balance > 0 ? 'text-red-500' : 'text-zinc-400'}`}>
-                                        ₹{entry.outstanding_balance.toLocaleString()}
-                                    </span>
-                                </td>
-                                <td className="px-10 py-6 text-right">
-                                    <Button variant="ghost" className="rounded-xl h-10 w-10 p-0 text-zinc-300 group-hover:text-zinc-900">
-                                        <ChevronRight className="h-5 w-5" />
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {filteredLedger.length === 0 && (
-                <div className="p-20 text-center">
-                    <BookOpen className="h-12 w-12 text-zinc-100 mx-auto mb-4" />
-                    <p className="text-zinc-400 font-bold uppercase tracking-widest text-sm">No ledger entries found</p>
+            {isTransactionsLoading ? (
+              <div className="py-20 text-center text-sm font-black uppercase tracking-[0.2em] text-zinc-400">
+                Loading transactions...
+              </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="px-6 py-20 text-center">
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-zinc-400">No transactions found</p>
+              </div>
+            ) : (
+              <>
+                <div className="hidden lg:block">
+                  <div className="grid grid-cols-[180px_minmax(240px,1fr)_180px_180px] gap-4 border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
+                    <div>Type</div>
+                    <div>Name</div>
+                    <div>Date</div>
+                    <div>Amount</div>
+                  </div>
+                  <div className="max-h-[70vh] overflow-y-auto">
+                    {filteredTransactions.map((transaction) => (
+                      <button
+                        key={transaction.payment_id}
+                        type="button"
+                        onClick={() => transaction.party_id && router.push(`/admin/arp/ledger/${transaction.party_id}`)}
+                        className="grid w-full grid-cols-[180px_minmax(240px,1fr)_180px_180px] gap-4 border-b border-zinc-100 px-6 py-4 text-left transition hover:bg-sky-50/60"
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-900">{formatSourceLabel(transaction.source_module)}</div>
+                          <div className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                            transaction.direction === "out" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                          }`}>
+                            {transaction.direction === "out" ? "Debit" : "Credit"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-900">{transaction.party_name || "Walk-in Entry"}</div>
+                          <div className="mt-1 text-sm text-zinc-500">
+                            {transaction.reference_label || transaction.reference_id || transaction.payment_id}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-400">{transaction.remarks || "No remarks"}</div>
+                        </div>
+                        <div className="text-sm font-medium text-zinc-700">{formatTransactionDate(transaction.payment_date)}</div>
+                        <div className={`text-sm font-black ${transaction.direction === "out" ? "text-red-500" : "text-emerald-600"}`}>
+                          {transaction.direction === "out" ? "-" : "+"}
+                          {formatCurrency(transaction.amount)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                <div className="space-y-3 p-4 lg:hidden">
+                  {filteredTransactions.map((transaction) => (
+                    <button
+                      key={transaction.payment_id}
+                      type="button"
+                      onClick={() => transaction.party_id && router.push(`/admin/arp/ledger/${transaction.party_id}`)}
+                      className="w-full rounded-[1.5rem] border border-zinc-200 bg-zinc-50/70 p-4 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-bold text-zinc-900">{transaction.party_name || "Walk-in Entry"}</div>
+                          <div className="mt-1 text-xs text-zinc-500">{formatTransactionDate(transaction.payment_date)}</div>
+                        </div>
+                        <div className={`text-sm font-black ${transaction.direction === "out" ? "text-red-500" : "text-emerald-600"}`}>
+                          {transaction.direction === "out" ? "-" : "+"}
+                          {formatCurrency(transaction.amount)}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-zinc-600">
+                          {formatSourceLabel(transaction.source_module)}
+                        </span>
+                        <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+                          transaction.direction === "out" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                        }`}>
+                          {transaction.direction === "out" ? "Debit" : "Credit"}
+                        </span>
+                      </div>
+                      <div className="mt-3 text-sm text-zinc-600">
+                        {transaction.reference_label || transaction.reference_id || transaction.payment_id}
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-400">{transaction.remarks || "No remarks"}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
+          </section>
         </div>
-
       </div>
     </div>
   );

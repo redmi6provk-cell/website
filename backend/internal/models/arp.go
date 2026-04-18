@@ -9,6 +9,7 @@ import (
 type Party struct {
 	PartyID   uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"party_id"`
 	Name      string         `gorm:"type:varchar;not null" json:"name"`
+	ShopName  string         `gorm:"type:varchar(120);default:''" json:"shop_name"`
 	Type      string         `gorm:"type:varchar(20);not null" json:"type"` // customer, supplier
 	CreatedAt time.Time      `json:"created_at"`
 	Contacts  []PartyContact `gorm:"foreignKey:PartyID" json:"contacts,omitempty"`

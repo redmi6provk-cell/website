@@ -239,7 +239,7 @@ export default function Navbar() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200 bg-white/95 backdrop-blur md:hidden">
-        <nav className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.45rem)] pt-2">
+        <nav className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.3rem)] pt-1.5">
           {mobileNavLinks.map(({ href, label, icon: Icon }) => {
             const active = isActiveLink(href);
 
@@ -247,11 +247,11 @@ export default function Navbar() {
               <Link
                 key={href}
                 href={href}
-                className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition-colors duration-200 ${
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-medium transition-colors duration-200 ${
                   active ? "bg-zinc-950 text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
                 <span>{label}</span>
               </Link>
             );
@@ -259,13 +259,13 @@ export default function Navbar() {
 
           <Link
             href={isAuthenticated ? "/dashboard" : "/auth/login"}
-            className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition-colors duration-200 ${
+            className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-medium transition-colors duration-200 ${
               pathname?.startsWith("/dashboard") || pathname?.startsWith("/auth")
                 ? "bg-zinc-950 text-white"
                 : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
             }`}
           >
-            <User className="h-4 w-4" />
+            <User className="h-3.5 w-3.5" />
             <span>Profile</span>
           </Link>
         </nav>

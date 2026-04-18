@@ -13,6 +13,24 @@ import (
 	"gorm.io/gorm"
 )
 
+type ledgerAggregateRow struct {
+	PartyID   string
+	PartyName string
+	PartyType string
+	Amount    float64
+}
+
+type ledgerTransactionRow struct {
+	Date        time.Time
+	Type        string
+	RefID       string
+	InvoiceID   string
+	Amount      float64
+	PaymentMode string
+	Remarks     string
+	Direction   string
+}
+
 type ARPRepository struct {
 	db *gorm.DB
 }
@@ -35,15 +53,18 @@ func (r *ARPRepository) EnsureCustomerPartyForUser(user *models.User) error {
 		var existingContact models.PartyContact
 		err := tx.Where("contact_type = ? AND contact_value = ?", "phone", user.Phone).First(&existingContact).Error
 		if err == nil {
-			return nil
+			return tx.Model(&models.Party{}).
+				Where("party_id = ? AND (COALESCE(shop_name, '') = '')", existingContact.PartyID).
+				Update("shop_name", user.ShopName).Error
 		}
 		if err != gorm.ErrRecordNotFound {
 			return err
 		}
 
 		party := models.Party{
-			Name: user.Name,
-			Type: "customer",
+			Name:     user.Name,
+			ShopName: user.ShopName,
+			Type:     "customer",
 			Contacts: []models.PartyContact{
 				{
 					ContactName:  user.Name,
@@ -140,8 +161,9 @@ func (r *ARPRepository) UpdateParty(party *models.Party) error {
 		if err := tx.Model(&models.Party{}).
 			Where("party_id = ?", party.PartyID).
 			Updates(map[string]interface{}{
-				"name": party.Name,
-				"type": party.Type,
+				"name":      party.Name,
+				"shop_name": party.ShopName,
+				"type":      party.Type,
 			}).Error; err != nil {
 			return err
 		}
@@ -248,42 +270,195 @@ func (r *ARPRepository) RecordPayment(payment *models.Payment) error {
 
 // Ledger View
 func (r *ARPRepository) GetLedger() ([]models.PartyLedger, error) {
-	var ledger []models.PartyLedger
-	err := r.db.Raw(`
-		SELECT pl.*
-		FROM party_ledger pl
-		LEFT JOIN party_contacts pc
-			ON pc.party_id = pl.party_id
+	parties := make(map[string]*models.PartyLedger)
+
+	ensureParty := func(row ledgerAggregateRow) *models.PartyLedger {
+		entry, exists := parties[row.PartyID]
+		if exists {
+			return entry
+		}
+
+		parsedPartyID, _ := uuid.Parse(row.PartyID)
+		entry = &models.PartyLedger{
+			PartyID:   parsedPartyID,
+			PartyName: row.PartyName,
+			PartyType: row.PartyType,
+		}
+		parties[row.PartyID] = entry
+		return entry
+	}
+
+	var invoiceRows []ledgerAggregateRow
+	if err := r.db.Raw(`
+		SELECT
+			pa.party_id::text AS party_id,
+			pa.name AS party_name,
+			pa.type AS party_type,
+			COALESCE(SUM(i.total_amount), 0) AS amount
+		FROM invoices AS i
+		JOIN parties AS pa ON pa.party_id = i.party_id
+		LEFT JOIN party_contacts AS pc
+			ON pc.party_id = pa.party_id
 			AND pc.contact_type = 'phone'
 			AND pc.is_primary = true
-		LEFT JOIN users u
+		LEFT JOIN users AS u
 			ON u.phone = pc.contact_value
 		WHERE COALESCE(u.role, 'USER') NOT IN ('ACCOUNTANT', 'ADMIN', 'SUPERADMIN')
-	`).Scan(&ledger).Error
-	return ledger, err
+		GROUP BY pa.party_id, pa.name, pa.type
+	`).Scan(&invoiceRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range invoiceRows {
+		ensureParty(row).TotalInvoiced += row.Amount
+	}
+
+	var offlineSaleRows []ledgerAggregateRow
+	if err := r.db.Raw(`
+		SELECT
+			pa.party_id::text AS party_id,
+			pa.name AS party_name,
+			pa.type AS party_type,
+			COALESCE(SUM(os.final_total), 0) AS amount
+		FROM offline_sales AS os
+		JOIN parties AS pa
+			ON (
+				pa.party_id = os.customer_party_id
+				OR (
+					os.customer_party_id IS NULL
+					AND pa.type = 'customer'
+					AND EXISTS (
+						SELECT 1
+						FROM party_contacts AS pc
+						WHERE pc.party_id = pa.party_id
+							AND pc.contact_type = 'phone'
+							AND TRIM(pc.contact_value) = TRIM(os.customer_phone)
+					)
+				)
+			)
+		LEFT JOIN users AS u
+			ON u.phone = os.customer_phone
+		WHERE (
+			os.customer_party_id IS NOT NULL
+			OR TRIM(COALESCE(os.customer_phone, '')) <> ''
+		)
+			AND COALESCE(u.role, 'USER') NOT IN ('ACCOUNTANT', 'ADMIN', 'SUPERADMIN')
+		GROUP BY pa.party_id, pa.name, pa.type
+	`).Scan(&offlineSaleRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range offlineSaleRows {
+		ensureParty(row).TotalInvoiced += row.Amount
+	}
+
+	var purchaseRows []ledgerAggregateRow
+	if err := r.db.Raw(`
+		SELECT
+			supplier_party_id::text AS party_id,
+			supplier_name AS party_name,
+			'supplier' AS party_type,
+			COALESCE(SUM(total_amount), 0) AS amount
+		FROM purchases
+		WHERE supplier_party_id IS NOT NULL
+		GROUP BY supplier_party_id, supplier_name
+	`).Scan(&purchaseRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range purchaseRows {
+		ensureParty(row).TotalInvoiced += row.Amount
+	}
+
+	var paymentRows []ledgerAggregateRow
+	if err := r.db.Raw(`
+		SELECT
+			pa.party_id::text AS party_id,
+			pa.name AS party_name,
+			pa.type AS party_type,
+			COALESCE(SUM(p.amount), 0) AS amount
+		FROM payments AS p
+		JOIN invoices AS i ON i.invoice_id = p.invoice_id
+		JOIN parties AS pa ON pa.party_id = i.party_id
+		LEFT JOIN party_contacts AS pc
+			ON pc.party_id = pa.party_id
+			AND pc.contact_type = 'phone'
+			AND pc.is_primary = true
+		LEFT JOIN users AS u
+			ON u.phone = pc.contact_value
+		WHERE COALESCE(u.role, 'USER') NOT IN ('ACCOUNTANT', 'ADMIN', 'SUPERADMIN')
+		GROUP BY pa.party_id, pa.name, pa.type
+	`).Scan(&paymentRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range paymentRows {
+		ensureParty(row).TotalPaid += row.Amount
+	}
+
+	var financeRows []ledgerAggregateRow
+	if err := r.db.Raw(`
+		SELECT
+			party_id,
+			MAX(COALESCE(NULLIF(TRIM(party_name), ''), reference_label, reference_id, 'Unknown Party')) AS party_name,
+			MAX(COALESCE(NULLIF(TRIM(party_type), ''), 'customer')) AS party_type,
+			COALESCE(SUM(
+				CASE
+					WHEN LOWER(COALESCE(TRIM(party_type), '')) = 'customer' AND LOWER(COALESCE(TRIM(direction), '')) = 'in' THEN amount
+					WHEN LOWER(COALESCE(TRIM(party_type), '')) = 'customer' AND LOWER(COALESCE(TRIM(direction), '')) = 'out' THEN -amount
+					WHEN LOWER(COALESCE(TRIM(party_type), '')) = 'supplier' AND LOWER(COALESCE(TRIM(direction), '')) = 'out' THEN amount
+					WHEN LOWER(COALESCE(TRIM(party_type), '')) = 'supplier' AND LOWER(COALESCE(TRIM(direction), '')) = 'in' THEN -amount
+					ELSE 0
+				END
+			), 0) AS amount
+		FROM finance_transactions
+		WHERE TRIM(COALESCE(party_id, '')) <> ''
+		GROUP BY party_id
+	`).Scan(&financeRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range financeRows {
+		ensureParty(row).TotalPaid += row.Amount
+	}
+
+	ledger := make([]models.PartyLedger, 0, len(parties))
+	for _, entry := range parties {
+		entry.OutstandingBalance = entry.TotalInvoiced - entry.TotalPaid
+		ledger = append(ledger, *entry)
+	}
+
+	sort.SliceStable(ledger, func(i, j int) bool {
+		if ledger[i].PartyType == ledger[j].PartyType {
+			return strings.ToLower(ledger[i].PartyName) < strings.ToLower(ledger[j].PartyName)
+		}
+		return ledger[i].PartyType < ledger[j].PartyType
+	})
+
+	return ledger, nil
 }
 
 func (r *ARPRepository) GetSummary() (map[string]interface{}, error) {
-	var totals struct {
-		Receivable float64 `gorm:"column:total_receivable"`
-		Payable    float64 `gorm:"column:total_payable"`
+	ledger, err := r.GetLedger()
+	if err != nil {
+		return nil, err
 	}
-	err := r.db.Raw(`
-		WITH filtered_party_ledger AS (
-			SELECT pl.*
-			FROM party_ledger pl
-			LEFT JOIN party_contacts pc
-				ON pc.party_id = pl.party_id
-				AND pc.contact_type = 'phone'
-				AND pc.is_primary = true
-			LEFT JOIN users u
-				ON u.phone = pc.contact_value
-			WHERE COALESCE(u.role, 'USER') NOT IN ('ACCOUNTANT', 'ADMIN', 'SUPERADMIN')
-		)
-		SELECT 
-			COALESCE((SELECT SUM(CASE WHEN party_type = 'customer' THEN outstanding_balance ELSE 0 END) FROM filtered_party_ledger), 0) as total_receivable,
-			COALESCE((SELECT SUM(CASE WHEN party_type = 'supplier' THEN outstanding_balance ELSE 0 END) FROM filtered_party_ledger), 0) as total_payable
-	`).Scan(&totals).Error
+
+	totals := struct {
+		Receivable float64
+		Payable    float64
+	}{}
+
+	for _, entry := range ledger {
+		// Dashboard cards should show only pending dues, not already settled or overpaid balances.
+		if entry.OutstandingBalance <= 0 {
+			continue
+		}
+
+		if strings.EqualFold(entry.PartyType, "customer") {
+			totals.Receivable += entry.OutstandingBalance
+			continue
+		}
+
+		if strings.EqualFold(entry.PartyType, "supplier") {
+			totals.Payable += entry.OutstandingBalance
+		}
+	}
 
 	var settings models.AdminSettings
 	bankAccounts := make([]map[string]interface{}, 0)
@@ -305,51 +480,181 @@ func (r *ARPRepository) GetSummary() (map[string]interface{}, error) {
 func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction, error) {
 	var transactions []models.Transaction
 
-	// Fetch Invoices
-	var invoices []models.Invoice
-	if err := r.db.Where("party_id = ?", partyID).Order("invoice_date asc").Find(&invoices).Error; err != nil {
+	parsedPartyID, err := uuid.Parse(partyID)
+	if err != nil {
 		return nil, err
 	}
 
-	// Fetch Payments for these invoices
-	var invoiceIDs []uuid.UUID
-	for _, inv := range invoices {
-		invoiceIDs = append(invoiceIDs, inv.InvoiceID)
+	party, err := r.GetPartyByID(parsedPartyID.String())
+	if err != nil {
+		return nil, err
 	}
 
-	var payments []models.Payment
-	if len(invoiceIDs) > 0 {
-		if err := r.db.Where("invoice_id IN ?", invoiceIDs).Order("payment_date asc").Find(&payments).Error; err != nil {
-			return nil, err
+	phoneNumbers := make([]string, 0)
+	for _, contact := range party.Contacts {
+		if strings.EqualFold(contact.ContactType, "phone") && strings.TrimSpace(contact.ContactValue) != "" {
+			phoneNumbers = append(phoneNumbers, strings.TrimSpace(contact.ContactValue))
 		}
 	}
 
-	for _, inv := range invoices {
+	var invoiceRows []ledgerTransactionRow
+	if err := r.db.Raw(`
+		SELECT
+			invoice_date AS date,
+			'invoice' AS type,
+			invoice_no AS ref_id,
+			invoice_id::text AS invoice_id,
+			total_amount AS amount,
+			'' AS payment_mode,
+			'Invoice Generated' AS remarks
+		FROM invoices
+		WHERE party_id = ?
+	`, parsedPartyID).Scan(&invoiceRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range invoiceRows {
 		transactions = append(transactions, models.Transaction{
-			Date:      inv.InvoiceDate,
-			Type:      "invoice",
-			RefID:     inv.InvoiceNo,
-			InvoiceID: inv.InvoiceID.String(),
-			Amount:    inv.TotalAmount,
-			Remarks:   "Invoice Generated",
+			Date:      row.Date,
+			Type:      row.Type,
+			RefID:     row.RefID,
+			InvoiceID: row.InvoiceID,
+			Amount:    row.Amount,
+			Remarks:   row.Remarks,
 		})
 	}
 
-	for _, p := range payments {
+	var paymentRows []ledgerTransactionRow
+	if err := r.db.Raw(`
+		SELECT
+			p.payment_date AS date,
+			'payment' AS type,
+			i.invoice_no AS ref_id,
+			p.invoice_id::text AS invoice_id,
+			p.amount AS amount,
+			p.payment_mode AS payment_mode,
+			COALESCE(NULLIF(TRIM(p.remarks), ''), 'Invoice payment received') AS remarks
+		FROM payments AS p
+		JOIN invoices AS i ON i.invoice_id = p.invoice_id
+		WHERE i.party_id = ?
+	`, parsedPartyID).Scan(&paymentRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range paymentRows {
 		transactions = append(transactions, models.Transaction{
-			Date:        p.PaymentDate,
-			Type:        "payment",
-			RefID:       p.PaymentID.String(),
-			InvoiceID:   p.InvoiceID.String(),
-			Amount:      p.Amount,
-			PaymentMode: p.PaymentMode,
-			Remarks:     p.Remarks,
+			Date:        row.Date,
+			Type:        row.Type,
+			RefID:       row.RefID,
+			InvoiceID:   row.InvoiceID,
+			Amount:      row.Amount,
+			PaymentMode: row.PaymentMode,
+			Remarks:     row.Remarks,
+		})
+	}
+
+	if strings.EqualFold(party.Type, "supplier") {
+		var purchaseRows []ledgerTransactionRow
+		if err := r.db.Raw(`
+			SELECT
+				date AS date,
+				'invoice' AS type,
+				COALESCE(NULLIF(TRIM(invoice_number), ''), id::text) AS ref_id,
+				'' AS invoice_id,
+				total_amount AS amount,
+				'' AS payment_mode,
+				COALESCE(NULLIF(TRIM(notes), ''), 'Purchase bill created') AS remarks
+			FROM purchases
+			WHERE supplier_party_id = ?
+		`, parsedPartyID).Scan(&purchaseRows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range purchaseRows {
+			transactions = append(transactions, models.Transaction{
+				Date:      row.Date,
+				Type:      row.Type,
+				RefID:     row.RefID,
+				InvoiceID: row.InvoiceID,
+				Amount:    row.Amount,
+				Remarks:   row.Remarks,
+			})
+		}
+	}
+
+	if strings.EqualFold(party.Type, "customer") && len(phoneNumbers) > 0 {
+		var offlineRows []ledgerTransactionRow
+		if err := r.db.Raw(`
+			SELECT
+				sale_date AS date,
+				'invoice' AS type,
+				bill_number AS ref_id,
+				'' AS invoice_id,
+				final_total AS amount,
+				'' AS payment_mode,
+				COALESCE(NULLIF(TRIM(notes), ''), 'Offline sale invoice') AS remarks
+			FROM offline_sales
+			WHERE customer_phone IN ?
+		`, phoneNumbers).Scan(&offlineRows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range offlineRows {
+			transactions = append(transactions, models.Transaction{
+				Date:      row.Date,
+				Type:      row.Type,
+				RefID:     row.RefID,
+				InvoiceID: row.InvoiceID,
+				Amount:    row.Amount,
+				Remarks:   row.Remarks,
+			})
+		}
+	}
+
+	var financeRows []ledgerTransactionRow
+	if err := r.db.Raw(`
+		SELECT
+			transaction_date AS date,
+			'' AS type,
+			COALESCE(NULLIF(TRIM(reference_label), ''), NULLIF(TRIM(reference_id), ''), source_module) AS ref_id,
+			'' AS invoice_id,
+			amount AS amount,
+			payment_mode AS payment_mode,
+			COALESCE(NULLIF(TRIM(remarks), ''), 'Payment recorded') AS remarks,
+			direction
+		FROM finance_transactions
+		WHERE party_id = ?
+	`, parsedPartyID.String()).Scan(&financeRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range financeRows {
+		transactionType := "payment"
+		if strings.EqualFold(party.Type, "customer") && strings.EqualFold(row.Direction, "out") {
+			transactionType = "invoice"
+		}
+		if strings.EqualFold(party.Type, "supplier") && strings.EqualFold(row.Direction, "in") {
+			transactionType = "invoice"
+		}
+		transactions = append(transactions, models.Transaction{
+			Date:        row.Date,
+			Type:        transactionType,
+			RefID:       row.RefID,
+			InvoiceID:   row.InvoiceID,
+			Amount:      row.Amount,
+			PaymentMode: row.PaymentMode,
+			Remarks:     row.Remarks,
 		})
 	}
 
 	sort.SliceStable(transactions, func(i, j int) bool {
 		return transactions[i].Date.Before(transactions[j].Date)
 	})
+
+	balance := 0.0
+	for index := range transactions {
+		if transactions[index].Type == "invoice" {
+			balance += transactions[index].Amount
+		} else {
+			balance -= transactions[index].Amount
+		}
+		transactions[index].Balance = balance
+	}
 
 	return transactions, nil
 }

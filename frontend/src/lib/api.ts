@@ -1,6 +1,5 @@
 import axios from "axios";
 import Cookies from "js-cookie";
-
 function isLocalHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
@@ -14,6 +13,32 @@ function getStoredToken() {
     return Cookies.get("token");
   }
   return Cookies.get("token") || localStorage.getItem("token");
+}
+
+function getCookieDomain() {
+  if (typeof window === "undefined") return undefined;
+  const hostname = window.location.hostname;
+  if (isLocalHostname(hostname)) return undefined;
+  const segments = hostname.split(".").filter(Boolean);
+  if (segments.length < 2) return undefined;
+  return `.${segments.slice(-2).join(".")}`;
+}
+
+function clearPersistedAuth() {
+  const domain = getCookieDomain();
+  Cookies.remove("token");
+  if (domain) {
+    Cookies.remove("token", { domain });
+  }
+
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    sessionStorage.removeItem("admin-panel-unlocked");
+    void import("@/store/cartStore").then(({ useCartStore }) => {
+      useCartStore.getState().setCartOwner(null);
+    });
+  }
 }
 
 function getBaseURL() {
@@ -68,9 +93,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token if unauthorized
-      Cookies.remove("token");
-      localStorage.removeItem("token");
+      clearPersistedAuth();
       // Optional: window.location.href = "/auth/login";
     }
     return Promise.reject(error);

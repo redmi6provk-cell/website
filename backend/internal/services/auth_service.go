@@ -82,6 +82,12 @@ func (s *AuthService) Login(phone string) (string, *models.User, error) {
 		return "", nil, errors.New("user not found")
 	}
 
+	if user.Role == models.RoleUser && s.arpRepo != nil {
+		if err := s.arpRepo.EnsureCustomerPartyForUser(user); err != nil {
+			return "", nil, err
+		}
+	}
+
 	now := time.Now()
 	user.LastLoginAt = &now
 	if err := s.repo.Update(user); err != nil {

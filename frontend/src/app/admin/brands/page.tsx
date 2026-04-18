@@ -8,6 +8,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import ImageUploader from "@/components/ui/ImageUploader";
 import { 
   Plus, 
@@ -33,6 +34,7 @@ export default function BrandsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [newBrand, setNewBrand] = useState({
     name: "",
@@ -76,6 +78,7 @@ export default function BrandsPage() {
       }
       await fetchBrands();
       setIsModalOpen(false);
+      setSuccessMessage(editingBrandId ? "Brand updated successfully." : "Brand created successfully.");
       setEditingBrandId(null);
       setNewBrand({ name: "", logo_url: "" });
     } catch (error) {
@@ -233,6 +236,12 @@ export default function BrandsPage() {
                 </Button>
             </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

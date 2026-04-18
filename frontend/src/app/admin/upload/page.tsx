@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import { Upload, FileText, CheckCircle2, AlertCircle, ChevronLeft } from "lucide-react";
 
 export default function AdminUploadPage() {
@@ -15,6 +16,7 @@ export default function AdminUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string; errors?: string[] } | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -56,6 +58,7 @@ export default function AdminUploadPage() {
           type: "success",
           message: "Bulk upload successful! All products added/updated.",
         });
+        setSuccessMessage("Bulk upload submitted successfully.");
         setFile(null);
       }
     } catch (err: any) {
@@ -156,6 +159,12 @@ export default function AdminUploadPage() {
             </Button>
           </div>
         </div>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

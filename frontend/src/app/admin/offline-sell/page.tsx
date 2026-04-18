@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import api from "@/lib/api";
 import { Order, Product } from "@/types";
 
@@ -42,7 +43,7 @@ type RawSaleItem = Partial<SaleItem> & { id?: string | number; product_id?: stri
 type RawSale = Partial<Omit<Sale, "items">> & { id?: string | number; items?: RawSaleItem[] };
 type FormLine = { id: string; product_id: string; quantity: string; sell_price: string; discount_value: string };
 type Contact = { contact_type: string; contact_value: string };
-type Party = { party_id: string; name: string; type: string; created_at: string; contacts?: Contact[] };
+type Party = { party_id: string; name: string; shop_name?: string; type: string; created_at: string; contacts?: Contact[] };
 type FormState = {
   bill_number: string; sale_date: string; customer_name: string; customer_phone: string; shop_name: string; payment_mode: PaymentMode;
   notes: string; amount_received: string; items: FormLine[];
@@ -50,7 +51,7 @@ type FormState = {
 
 const todayValue = () => new Date().toISOString().slice(0, 10);
 const newLine = (): FormLine => ({ id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, product_id: "", quantity: "1", sell_price: "", discount_value: "0" });
-const emptyForm = (): FormState => ({ bill_number: "", sale_date: todayValue(), customer_name: "Walk-in Customer", customer_phone: "", shop_name: "", payment_mode: "cash", notes: "", amount_received: "", items: [newLine()] });
+const emptyForm = (): FormState => ({ bill_number: "", sale_date: todayValue(), customer_name: "Walk-in Customer", customer_phone: "", shop_name: "", payment_mode: "cash", notes: "", amount_received: "0", items: [newLine()] });
 const money = (v: number) => `Rs. ${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const dateLabel = (v: string) => (v ? new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
 const formatPaymentLabel = (value: string) => value.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
@@ -122,7 +123,8 @@ export default function AdminOfflineSellPage() {
   const [paymentOptions, setPaymentOptions] = useState<string[]>(["cash", "card", "mixed"]);
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
   const [isPartySubmitting, setIsPartySubmitting] = useState(false);
-  const [partyForm, setPartyForm] = useState({ name: "", phone: "", email: "" });
+  const [partyForm, setPartyForm] = useState({ name: "", shop_name: "", phone: "", email: "" });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => { checkAuth(); }, [checkAuth]);
 
@@ -176,6 +178,7 @@ export default function AdminOfflineSellPage() {
     const amountReceived = Math.max(0, Number(form.amount_received) || 0);
     return { subtotal, discountTotal, finalTotal, amountReceived, balanceDue: Math.max(0, finalTotal - amountReceived), stockIssue: linePreview.some((l) => l.stockIssue) };
   }, [linePreview, form.amount_received]);
+  const isFullyReceived = summary.finalTotal > 0 && Math.abs(summary.amountReceived - summary.finalTotal) < 0.01;
 
   const historyEntries = useMemo(
     () =>
@@ -233,6 +236,7 @@ export default function AdminOfflineSellPage() {
       ...current,
       customer_name: customer.name || current.customer_name,
       customer_phone: getPartyContact(customer, "phone") || current.customer_phone,
+      shop_name: customer.shop_name || "",
     }));
   };
   const handleCreateParty = async (event: React.FormEvent) => {
@@ -241,6 +245,7 @@ export default function AdminOfflineSellPage() {
     try {
       const payload = {
         name: partyForm.name.trim(),
+        shop_name: partyForm.shop_name.trim(),
         type: "customer",
         contacts: [
           { contact_type: "phone", contact_value: partyForm.phone.trim() },
@@ -255,9 +260,11 @@ export default function AdminOfflineSellPage() {
         ...current,
         customer_name: createdParty.name || current.customer_name,
         customer_phone: getPartyContact(createdParty, "phone") || partyForm.phone.trim() || current.customer_phone,
+        shop_name: createdParty.shop_name || partyForm.shop_name.trim() || "",
       }));
-      setPartyForm({ name: "", phone: "", email: "" });
+      setPartyForm({ name: "", shop_name: "", phone: "", email: "" });
       setIsPartyModalOpen(false);
+      setSuccessMessage("Customer party created successfully.");
     } catch (e: unknown) {
       setError(getApiErrorMessage(e, "Failed to create customer party"));
     } finally {
@@ -362,11 +369,12 @@ export default function AdminOfflineSellPage() {
     const items = linePreview.filter((l) => l.product && l.quantity > 0).map((l) => ({ product_id: l.product!.id, product_name: l.product!.name, quantity: l.quantity, sell_price: l.sellPrice, discount_value: l.discountValue, line_total: l.lineTotal }));
     if (items.length === 0) return setError("At least one valid item required");
     if (summary.stockIssue) return setError("One or more selected products do not have enough stock");
-    const payload = { bill_number: form.bill_number.trim(), sale_date: form.sale_date, customer_name: form.customer_name.trim() || "Walk-in Customer", customer_phone: form.customer_phone.trim(), shop_name: form.shop_name.trim(), payment_mode: form.payment_mode, notes: form.notes.trim(), amount_received: summary.amountReceived, items };
+    const payload = { bill_number: form.bill_number.trim(), sale_date: form.sale_date, customer_party_id: selectedCustomerId || "", customer_name: form.customer_name.trim() || "Walk-in Customer", customer_phone: form.customer_phone.trim(), shop_name: form.shop_name.trim(), payment_mode: form.payment_mode, notes: form.notes.trim(), amount_received: summary.amountReceived, items };
     try {
       const res = editingId ? await api.put(`/admin/offline-sales/${editingId}`, payload) : await api.post("/admin/offline-sales", payload);
       const saved = normalizeSale(res.data.data);
       await refreshSales();
+      setSuccessMessage(editingId ? "Offline sale updated successfully." : "Offline sale saved successfully.");
       resetForm();
       if (printAfterSave) printSale(saved);
     } catch (e: unknown) {
@@ -482,7 +490,35 @@ export default function AdminOfflineSellPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"><div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Summary</div><div className="mt-4 space-y-2 text-sm text-zinc-600"><div className="flex items-center justify-between"><span>Subtotal</span><span className="font-semibold text-zinc-900">{money(summary.subtotal)}</span></div><div className="flex items-center justify-between"><span>Discount Total</span><span className="font-semibold text-zinc-900">{money(summary.discountTotal)}</span></div><div className="flex items-center justify-between"><span>Final Total</span><span className="font-bold text-green-700">{money(summary.finalTotal)}</span></div></div></div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"><label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Amount Received</label><input type="number" min="0" step="0.01" value={form.amount_received} onChange={(e) => setForm({ ...form, amount_received: e.target.value })} placeholder="0" className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500" /><div className="mt-4 flex items-center justify-between text-sm"><span className="text-zinc-500">Balance / Due</span><span className={`font-bold ${summary.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>{money(summary.balanceDue)}</span></div></div>
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Amount Received</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, amount_received: String(summary.finalTotal) }))}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                        isFullyReceived
+                          ? "border-green-600 bg-green-600 text-white"
+                          : "border-zinc-300 bg-white text-zinc-500 hover:border-green-500 hover:text-green-600"
+                      }`}
+                      aria-label="Set received amount to full total"
+                      title="Set received amount to total"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.amount_received}
+                    onChange={(e) => setForm({ ...form, amount_received: e.target.value })}
+                    placeholder="0"
+                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
+                  />
+                  <p className="mt-2 text-xs text-zinc-500">Tick button click karte hi full total received me fill ho jayega.</p>
+                  <div className="mt-4 flex items-center justify-between text-sm"><span className="text-zinc-500">Balance / Due</span><span className={`font-bold ${summary.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>{money(summary.balanceDue)}</span></div>
+                </div>
               </div>
 
               {summary.stockIssue && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">Selected quantity kisi product ke available stock se zyada hai.</div>}
@@ -505,6 +541,15 @@ export default function AdminOfflineSellPage() {
                 value={partyForm.name}
                 onChange={(e) => setPartyForm({ ...partyForm, name: e.target.value })}
                 placeholder="Customer name"
+                className="h-12 rounded-2xl"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label>
+              <Input
+                value={partyForm.shop_name}
+                onChange={(e) => setPartyForm({ ...partyForm, shop_name: e.target.value })}
+                placeholder="Optional shop name"
                 className="h-12 rounded-2xl"
               />
             </div>
@@ -534,6 +579,12 @@ export default function AdminOfflineSellPage() {
             </Button>
           </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

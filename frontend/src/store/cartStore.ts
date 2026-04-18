@@ -2,11 +2,29 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem, Product } from "@/types";
 import { getCartPricing } from "@/lib/pricing";
+import api from "@/lib/api";
 
 const GUEST_CART_KEY = "guest";
 
 function clampQuantityToStock(product: Product, quantity: number) {
   return Math.max(0, Math.min(quantity, Math.max(0, product.stock)));
+}
+
+async function syncServerCart(ownerId: string, items: CartItem[]) {
+  if (!ownerId || ownerId === GUEST_CART_KEY) {
+    return;
+  }
+
+  try {
+    await api.post("/cart/sync", {
+      items: items.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+      })),
+    });
+  } catch (error) {
+    console.error("Failed to sync cart to server", error);
+  }
 }
 
 interface CartState {
@@ -53,6 +71,7 @@ export const useCartStore = create<CartState>()(
 
       addItem: (product, quantity) => {
         const items = get().items;
+        const ownerId = get().activeCartOwner;
         const existingItem = items.find((item) => item.product.id === product.id);
         const currentQuantity = existingItem?.quantity || 0;
         const nextQuantity = clampQuantityToStock(product, currentQuantity + quantity);
@@ -90,10 +109,12 @@ export const useCartStore = create<CartState>()(
             [state.activeCartOwner]: nextItems,
           },
         }));
+        void syncServerCart(ownerId, nextItems);
       },
 
       removeItem: (productId) => {
         const nextItems = get().items.filter((item) => item.product.id !== productId);
+        const ownerId = get().activeCartOwner;
 
         set((state) => ({
           items: nextItems,
@@ -102,6 +123,7 @@ export const useCartStore = create<CartState>()(
             [state.activeCartOwner]: nextItems,
           },
         }));
+        void syncServerCart(ownerId, nextItems);
       },
 
       updateQuantity: (productId, quantity) => {
@@ -115,6 +137,7 @@ export const useCartStore = create<CartState>()(
             ? { ...item, quantity: clampQuantityToStock(item.product, quantity) }
             : item
         );
+        const ownerId = get().activeCartOwner;
 
         set((state) => ({
           items: nextItems,
@@ -123,9 +146,12 @@ export const useCartStore = create<CartState>()(
             [state.activeCartOwner]: nextItems,
           },
         }));
+        void syncServerCart(ownerId, nextItems);
       },
 
-      clearCart: () =>
+      clearCart: () => {
+        const ownerId = get().activeCartOwner;
+
         set((state) => ({
           items: [],
           cartNotice: null,
@@ -133,7 +159,9 @@ export const useCartStore = create<CartState>()(
             ...state.cartsByOwner,
             [state.activeCartOwner]: [],
           },
-        })),
+        }));
+        void syncServerCart(ownerId, []);
+      },
 
       clearCartNotice: () => set({ cartNotice: null }),
 

@@ -73,6 +73,8 @@ export interface Order {
   delivery_type?: "delivery" | "pickup";
   payment_mode?: "cod" | "qr";
   payment_status?: string;
+  received_amount?: number;
+  payment_collection_method?: string;
   address: string;
   notes?: string;
   items: OrderItem[];

@@ -277,7 +277,7 @@ function ProductsPageContent() {
             </div>
           )}
 
-          <div className="flex-1 pb-24 md:pb-0">
+          <div className="flex-1 pb-36 md:pb-0">
             {!showCategoriesOnly && (
               <div className="mb-6 hidden items-center justify-between gap-4 md:flex">
                 <div className="flex-1">
@@ -416,7 +416,7 @@ function ProductsPageContent() {
       </div>
 
       {!showCategoriesOnly && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.45)] backdrop-blur md:hidden">
+        <div className="fixed inset-x-0 bottom-16 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.45)] backdrop-blur md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-2 gap-3">
             <Button
               variant="outline"

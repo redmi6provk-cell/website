@@ -75,56 +75,52 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(187,247,208,0.35),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(254,240,138,0.28),_transparent_30%),linear-gradient(180deg,_#fcfcf8_0%,_#f4f4ef_100%)]">
-      <div className="container mx-auto px-4 py-8 pb-52 sm:px-6 lg:px-8 lg:pb-10 lg:py-10">
+      <div className="container mx-auto px-4 py-8 pb-44 sm:px-6 lg:px-8 lg:pb-10 lg:py-10">
         <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/75 shadow-[0_32px_120px_rgba(15,23,42,0.08)] backdrop-blur">
-          <div className="border-b border-zinc-200/70 px-6 py-8 sm:px-8 lg:px-10">
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:items-end">
+          <div className="border-b border-zinc-200/70 px-4 py-5 sm:px-8 sm:py-8 lg:px-10">
+            <div className="grid gap-4 sm:gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:items-end">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.32em] text-emerald-700">Cart Overview</p>
-                <h1 className="mt-3 max-w-2xl text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl">
-                  Review quantities, unlock slab pricing, and move to checkout with confidence.
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 sm:text-base">
-                  Sabhi selected items ek hi jagah visible hain, so quantity update, discount slab aur delivery impact turant samajh aa jaye.
-                </p>
+                <p className="text-[11px] font-black uppercase tracking-[0.26em] text-emerald-700 sm:text-xs sm:tracking-[0.32em]">Cart Overview</p>
+                
               </div>
+                <div className="flex gap-2 sm:gap-3">
+                  <div className="flex-1 rounded-[1.15rem] border border-emerald-100 bg-emerald-50/80 p-3 sm:rounded-[1.5rem] sm:p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700 sm:text-xs sm:tracking-[0.22em]">Products</p>
+                    <p className="mt-2 text-[2rem] leading-none font-black text-zinc-900 sm:text-3xl">{items.length}</p>
+                  
+                  </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Products</p>
-                  <p className="mt-2 text-3xl font-black text-zinc-900">{items.length}</p>
-                  <p className="mt-1 text-sm text-zinc-600">Unique cart lines</p>
+                  <div className="flex-1 rounded-[1.15rem] border border-amber-100 bg-amber-50/80 p-3 sm:rounded-[1.5rem] sm:p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 sm:text-xs sm:tracking-[0.22em]">Units</p>
+                    <p className="mt-2 text-[2rem] leading-none font-black text-zinc-900 sm:text-3xl">{totalUnits}</p>
+                   
+                  </div>
+
+                  <div className="flex-1 rounded-[1.15rem] border border-sky-100 bg-sky-50/80 p-3 sm:rounded-[1.5rem] sm:p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700 sm:text-xs sm:tracking-[0.22em]">Savings</p>
+                    <p className="mt-2 text-[2rem] leading-none font-black text-zinc-900 sm:text-3xl">Rs. {cartPricing.totalDiscount}</p>
+                
+                  </div>
                 </div>
-                <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-700">Units</p>
-                  <p className="mt-2 text-3xl font-black text-zinc-900">{totalUnits}</p>
-                  <p className="mt-1 text-sm text-zinc-600">Total quantity selected</p>
-                </div>
-                <div className="rounded-[1.5rem] border border-sky-100 bg-sky-50/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-sky-700">Savings</p>
-                  <p className="mt-2 text-3xl font-black text-zinc-900">Rs. {cartPricing.totalDiscount}</p>
-                  <p className="mt-1 text-sm text-zinc-600">Bulk pricing applied</p>
-                </div>
-              </div>
             </div>
 
-            <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-              <div className="rounded-[1.5rem] border border-zinc-200/80 bg-white/90 p-5">
+            <div className="mt-5 grid gap-3 sm:mt-8 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="rounded-[1.1rem] border border-zinc-200/80 bg-white/90 p-3.5 sm:rounded-[1.5rem] sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-bold text-zinc-900">Free delivery progress</p>
-                    <p className="mt-1 text-sm text-zinc-600">
+                    <p className="text-xs font-bold text-zinc-900 sm:text-sm">Free delivery progress</p>
+                    <p className="mt-1 text-xs text-zinc-600 sm:text-sm">
                       {shipping === 0
                         ? "Free delivery unlock ho chuki hai."
                         : `Bas Rs. ${shippingThreshold - totalPrice} aur add karo for free delivery.`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700">
-                    <Truck className="h-4 w-4 text-emerald-700" />
+                  <div className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                    <Truck className="h-3.5 w-3.5 text-emerald-700 sm:h-4 sm:w-4" />
                     {shipping === 0 ? "Delivery unlocked" : `${freeShippingProgress}% reached`}
                   </div>
                 </div>
-                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-zinc-200">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200 sm:mt-4 sm:h-2.5">
                   <div
                     className="h-full rounded-full bg-[linear-gradient(90deg,#15803d_0%,#f59e0b_100%)] transition-all duration-500"
                     style={{ width: `${Math.max(12, freeShippingProgress)}%` }}
@@ -134,7 +130,7 @@ export default function CartPage() {
 
               <Button
                 variant="ghost"
-                className="h-12 rounded-2xl px-5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100"
+                className="h-10 rounded-xl px-4 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 sm:h-12 sm:rounded-2xl sm:px-5"
                 onClick={() => clearCart()}
               >
                 Clear Cart
@@ -174,57 +170,74 @@ export default function CartPage() {
                   return (
                     <div
                       key={item.product.id}
-                      className="group grid gap-5 rounded-[1.75rem] border border-zinc-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.9))] p-5 transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:grid-cols-[120px_minmax(0,1fr)] sm:p-6"
+                      className="group grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-[1.1rem] border border-zinc-200/80 bg-white/96 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-5 sm:rounded-[1.75rem] sm:bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.9))] sm:p-6"
                     >
-                      <div className="relative h-28 overflow-hidden rounded-[1.35rem] border border-zinc-100 bg-[radial-gradient(circle_at_top,_rgba(187,247,208,0.55),_transparent_50%),linear-gradient(180deg,_#fafaf9_0%,_#f4f4f5_100%)] sm:h-full sm:min-h-[144px]">
-                        <NextImage
-                          src={imageSrc}
-                          alt={item.product.name}
-                          fill
-                          unoptimized={shouldBypassImageOptimization(imageSrc)}
-                          className="object-contain p-3 transition duration-500 group-hover:scale-105"
-                        />
+                      <div className="space-y-2">
+                        <div className="relative h-[72px] overflow-hidden rounded-xl border border-zinc-100 bg-[linear-gradient(180deg,_#fafaf9_0%,_#f4f4f5_100%)] sm:h-full sm:min-h-[144px] sm:rounded-[1.35rem] sm:bg-[radial-gradient(circle_at_top,_rgba(187,247,208,0.55),_transparent_50%),linear-gradient(180deg,_#fafaf9_0%,_#f4f4f5_100%)]">
+                          <NextImage
+                            src={imageSrc}
+                            alt={item.product.name}
+                            fill
+                            unoptimized={shouldBypassImageOptimization(imageSrc)}
+                            className="object-contain p-2 transition duration-500 group-hover:scale-105 sm:p-3"
+                          />
+                        </div>
+                        <div className="sm:hidden">
+                          <div className="text-base font-black leading-none text-zinc-900">Rs. {pricing.lineFinalTotal}</div>
+                          {pricing.lineDiscount > 0 && (
+                            <div className="mt-1 text-[11px] text-zinc-400 line-through">Rs. {pricing.lineBaseTotal}</div>
+                          )}
+                          <div className="mt-1 text-[11px] font-medium text-zinc-600">Rs. {pricing.finalUnitPrice} per unit</div>
+                        </div>
                       </div>
 
                       <div className="flex min-w-0 flex-col">
-                        <div className="flex flex-col gap-4 border-b border-zinc-200/70 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex flex-col gap-3 border-b border-zinc-200/70 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pb-4">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-zinc-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-600">
+                              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600 sm:px-3 sm:py-1 sm:text-[11px] sm:tracking-[0.22em]">
                                 {item.product.brand_info?.name || "Generic"}
                               </span>
                               {pricing.appliedDiscount && (
-                                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-800">
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800 sm:px-3 sm:py-1 sm:text-[11px] sm:tracking-[0.2em]">
                                   {formatDiscountLabel(pricing.appliedDiscount)}
                                 </span>
                               )}
                             </div>
-                            <h3 className="mt-3 text-xl font-black tracking-tight text-zinc-900">{item.product.name}</h3>
-                            <p className="mt-2 text-sm text-zinc-500">
+                            <h3 className="mt-2 text-sm font-black leading-snug text-zinc-900 sm:mt-3 sm:text-xl sm:tracking-tight">
+                              {item.product.name}
+                            </h3>
+                            <p className="mt-1 text-xs text-zinc-500 sm:mt-2 sm:text-sm">
                               {item.product.unit} | Minimum order {pricing.minimumOrderQuantity}
                             </p>
                             {!pricing.appliedDiscount && pricing.nextDiscount && (
-                              <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-zinc-600">
+                              <p className="mt-2 hidden items-center gap-2 text-sm font-medium text-zinc-600 sm:inline-flex">
                                 <Sparkles className="h-4 w-4 text-amber-500" />
                                 Next slab: {formatDiscountLabel(pricing.nextDiscount)}
                               </p>
                             )}
                           </div>
 
-                          <div className="sm:text-right">
-                            <p className="text-xs font-bold uppercase tracking-[0.22em] text-zinc-500">Line Total</p>
-                            <div className="mt-2 text-2xl font-black text-zinc-900">Rs. {pricing.lineFinalTotal}</div>
+                          <div className="hidden sm:text-right">
+                            <p className="hidden text-xs font-bold uppercase tracking-[0.22em] text-zinc-500 sm:block">Line Total</p>
+                            <div className="mt-1 text-xl font-black leading-none text-zinc-900 sm:mt-2 sm:text-2xl">
+                              Rs. {pricing.lineFinalTotal}
+                            </div>
                             {pricing.lineDiscount > 0 && (
-                              <div className="mt-1 text-sm text-zinc-400 line-through">Rs. {pricing.lineBaseTotal}</div>
+                              <div className="mt-1 text-xs text-zinc-400 line-through sm:text-sm">Rs. {pricing.lineBaseTotal}</div>
                             )}
-                            <div className="mt-2 text-sm font-medium text-zinc-600">Rs. {pricing.finalUnitPrice} per unit</div>
+                            <div className="mt-1 text-xs font-medium text-zinc-600 sm:mt-2 sm:text-sm">
+                              Rs. {pricing.finalUnitPrice} per unit
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex flex-col gap-4 pt-4 lg:flex-row lg:items-end lg:justify-between">
-                          <div className="space-y-3">
+                        <div className="flex flex-col gap-3 pt-3 sm:pt-4 lg:flex-row lg:items-end lg:justify-between">
+                          <div className="flex items-end justify-between gap-3 sm:block sm:space-y-2">
                             <div>
-                              <p className="mb-2 text-xs font-bold uppercase tracking-[0.28em] text-zinc-500">Adjust Quantity</p>
+                              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 sm:mb-2 sm:text-xs sm:tracking-[0.28em]">
+                                Qty
+                              </p>
                               <QuantitySelector
                                 quantity={item.quantity}
                                 max={item.product.stock}
@@ -233,16 +246,14 @@ export default function CartPage() {
                               />
                             </div>
 
-                            
+                            <button
+                              onClick={() => removeItem(item.product.id)}
+                              className="inline-flex items-center gap-1.5 self-start rounded-full px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 sm:gap-2 sm:text-sm"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              Remove item
+                            </button>
                           </div>
-
-                          <button
-                            onClick={() => removeItem(item.product.id)}
-                            className="inline-flex items-center gap-2 self-start rounded-full px-2 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove item
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -332,16 +343,16 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-24 z-40 border-t border-zinc-200/80 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
+      <div className="fixed inset-x-0 bottom-20 z-40 border-t border-zinc-200/80 bg-white/95 px-3 pb-2 pt-2 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur lg:hidden">
         <div className="mx-auto max-w-lg">
-          <div className="mb-3 flex items-end justify-between gap-4">
+          <div className="mb-2 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.24em] text-zinc-500">Total Payable</p>
-              <p className="mt-1 text-2xl font-black tracking-tight text-zinc-900">Rs. {orderTotal}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">Total Payable</p>
+              <p className="mt-0.5 text-[1.75rem] leading-none font-black tracking-tight text-zinc-900">Rs. {orderTotal}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs font-semibold text-zinc-600">{totalUnits} units</p>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="text-[11px] font-semibold leading-none text-zinc-600">{totalUnits} units</p>
+              <p className="mt-1 text-[11px] leading-tight text-zinc-500">
                 {shipping === 0 ? "Free delivery unlocked" : `Delivery Rs. ${shipping}`}
               </p>
             </div>
@@ -349,12 +360,12 @@ export default function CartPage() {
 
           {cartPricing.isValid ? (
             <Link href={isAuthenticated ? "/checkout" : "/auth/login?redirect=/checkout"} className="block">
-              <Button className="h-12 w-full rounded-2xl text-base font-semibold" rightIcon={ArrowRight}>
+              <Button className="h-10 w-full rounded-xl text-sm font-semibold" rightIcon={ArrowRight}>
                 Proceed to Checkout
               </Button>
             </Link>
           ) : (
-            <Button className="h-12 w-full rounded-2xl text-base font-semibold" disabled>
+            <Button className="h-10 w-full rounded-xl text-sm font-semibold" disabled>
               Fix minimum quantity to checkout
             </Button>
           )}

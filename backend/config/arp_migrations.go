@@ -30,6 +30,7 @@ func EnsureARPSchema() error {
 	}
 
 	statements := []string{
+		`ALTER TABLE parties ADD COLUMN IF NOT EXISTS shop_name varchar(120) DEFAULT ''`,
 		`ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_created_by_fkey`,
 		`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_processed_by_fkey`,
 		fmt.Sprintf(`
@@ -117,6 +118,33 @@ func EnsureOrderInvoiceNumberSchema() error {
 		WHERE invoice_number IS NOT NULL AND TRIM(invoice_number) <> ''
 	`).Error; err != nil {
 		return fmt.Errorf("order invoice number unique index alignment failed: %w", err)
+	}
+
+	return nil
+}
+
+func EnsureOrderPaymentTrackingSchema() error {
+	statements := []string{
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS received_amount numeric(15,2) DEFAULT 0`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_collection_method varchar(120)`,
+		`UPDATE orders
+		SET received_amount = total
+		WHERE payment_mode = 'cod'
+			AND status = 'confirmed'
+			AND payment_status = 'paid'
+			AND COALESCE(received_amount, 0) = 0`,
+		`UPDATE orders
+		SET payment_collection_method = 'cash'
+		WHERE payment_mode = 'cod'
+			AND status = 'confirmed'
+			AND payment_status = 'paid'
+			AND (payment_collection_method IS NULL OR TRIM(payment_collection_method) = '')`,
+	}
+
+	for _, statement := range statements {
+		if err := DB.Exec(statement).Error; err != nil {
+			return fmt.Errorf("order payment tracking schema alignment failed: %w", err)
+		}
 	}
 
 	return nil

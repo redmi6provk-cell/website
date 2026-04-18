@@ -109,7 +109,7 @@ func (r *OrderRepository) GetByID(orderID uuid.UUID) (*models.Order, error) {
 	return &order, nil
 }
 
-func (r *OrderRepository) UpdateStatus(orderID uuid.UUID, status string, note string, paymentStatus string, notes string, changedBy *uuid.UUID) error {
+func (r *OrderRepository) UpdateStatus(orderID uuid.UUID, status string, note string, paymentStatus string, notes string, receivedAmount *float64, paymentCollectionMethod string, changedBy *uuid.UUID) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
 			"status": status,
@@ -119,6 +119,12 @@ func (r *OrderRepository) UpdateStatus(orderID uuid.UUID, status string, note st
 		}
 		if notes != "" {
 			updates["notes"] = notes
+		}
+		if receivedAmount != nil {
+			updates["received_amount"] = *receivedAmount
+		}
+		if paymentCollectionMethod != "" {
+			updates["payment_collection_method"] = paymentCollectionMethod
 		}
 
 		if err := tx.Model(&models.Order{}).

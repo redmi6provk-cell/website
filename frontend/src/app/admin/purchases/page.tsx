@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import type { AxiosError } from "axios";
 import { Product } from "@/types";
 import {
@@ -114,6 +115,7 @@ export default function AdminPurchasesPage() {
   const [isSupplierSubmitting, setIsSupplierSubmitting] = useState(false);
   const [supplierFormError, setSupplierFormError] = useState<string | null>(null);
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "" });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -281,6 +283,7 @@ export default function AdminPurchasesPage() {
       }));
       setSupplierForm({ name: "", phone: "", email: "" });
       setIsSupplierModalOpen(false);
+      setSuccessMessage("Supplier created successfully.");
     } catch (error: unknown) {
       const message =
         typeof error === "object" &&
@@ -380,6 +383,7 @@ export default function AdminPurchasesPage() {
           .map(normalizePurchaseEntry)
           .sort((a: PurchaseEntry, b: PurchaseEntry) => b.date.localeCompare(a.date))
       );
+      setSuccessMessage(editingId ? "Purchase updated successfully." : "Purchase saved successfully.");
       resetForm();
     } catch (error: unknown) {
       const message =
@@ -858,6 +862,12 @@ export default function AdminPurchasesPage() {
             </Button>
           </form>
         </Modal>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

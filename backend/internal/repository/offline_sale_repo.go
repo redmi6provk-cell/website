@@ -107,20 +107,21 @@ func (r *OfflineSaleRepository) Update(sale *models.OfflineSale) error {
 		}
 
 		if err := tx.Model(&models.OfflineSale{}).Where("id = ?", sale.ID).Updates(map[string]interface{}{
-			"bill_number":      sale.BillNumber,
-			"sale_date":        sale.SaleDate,
-			"customer_name":    sale.CustomerName,
-			"customer_phone":   sale.CustomerPhone,
-			"shop_name":        sale.ShopName,
-			"payment_mode":     sale.PaymentMode,
-			"notes":            sale.Notes,
-			"subtotal":         sale.Subtotal,
-			"discount_total":   sale.DiscountTotal,
-			"final_total":      sale.FinalTotal,
-			"amount_received":  sale.AmountReceived,
-			"balance_due":      sale.BalanceDue,
-			"status":           sale.Status,
-			"created_by":       sale.CreatedBy,
+			"bill_number":       sale.BillNumber,
+			"sale_date":         sale.SaleDate,
+			"customer_party_id": sale.CustomerPartyID,
+			"customer_name":     sale.CustomerName,
+			"customer_phone":    sale.CustomerPhone,
+			"shop_name":         sale.ShopName,
+			"payment_mode":      sale.PaymentMode,
+			"notes":             sale.Notes,
+			"subtotal":          sale.Subtotal,
+			"discount_total":    sale.DiscountTotal,
+			"final_total":       sale.FinalTotal,
+			"amount_received":   sale.AmountReceived,
+			"balance_due":       sale.BalanceDue,
+			"status":            sale.Status,
+			"created_by":        sale.CreatedBy,
 		}).Error; err != nil {
 			return err
 		}

@@ -19,6 +19,7 @@ import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { SuccessPopup } from "@/components/ui/SuccessPopup";
 import api from "@/lib/api";
 
 type SettingsState = {
@@ -145,6 +146,7 @@ export default function AdminSettingsPage() {
   const { user, isAuthenticated, isInitialized, checkAuth, logout } = useAuthStore();
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
   const [saveMessage, setSaveMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOutSessions, setIsLoggingOutSessions] = useState(false);
@@ -271,6 +273,7 @@ export default function AdminSettingsPage() {
         manage_settings_permission: settings.manageSettingsPermission,
       });
       setSaveMessage("Settings successfully save ho gayi.");
+      setSuccessMessage("Settings saved successfully.");
     } catch (error: any) {
       setSaveMessage(error?.response?.data?.error || "Settings save nahi ho paayi.");
     } finally {
@@ -747,6 +750,12 @@ export default function AdminSettingsPage() {
             </div>
           </SectionCard>
         </div>
+        <SuccessPopup
+          isOpen={Boolean(successMessage)}
+          message={successMessage || ""}
+          onClose={() => setSuccessMessage(null)}
+          title="Form Submitted"
+        />
       </div>
     </div>
   );

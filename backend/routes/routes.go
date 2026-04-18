@@ -110,6 +110,7 @@ func SetupRoutes(
 			arp.DELETE("/parties/:id", arpHandler.DeleteParty)
 			arp.POST("/invoices", arpHandler.CreateInvoice)
 			arp.POST("/payments", arpHandler.RecordPayment)
+			arp.POST("/manual-transactions", arpHandler.RecordManualTransaction)
 			arp.GET("/ledger", arpHandler.GetLedger)
 			arp.GET("/ledger/:id", arpHandler.GetDetailedLedger)
 			arp.GET("/payment-transactions", arpHandler.GetPaymentModeTransactions)

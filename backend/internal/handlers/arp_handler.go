@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"backend/internal/models"
 	"backend/internal/services"
@@ -13,6 +15,19 @@ import (
 
 type ARPHandler struct {
 	service *services.ARPService
+}
+
+type manualFinanceTransactionRequest struct {
+	Direction       string  `json:"direction"`
+	PaymentMode     string  `json:"payment_mode"`
+	Amount          float64 `json:"amount"`
+	TransactionDate string  `json:"transaction_date"`
+	ReferenceID     string  `json:"reference_id"`
+	ReferenceLabel  string  `json:"reference_label"`
+	PartyID         string  `json:"party_id"`
+	PartyName       string  `json:"party_name"`
+	PartyType       string  `json:"party_type"`
+	Remarks         string  `json:"remarks"`
 }
 
 func NewARPHandler(service *services.ARPService) *ARPHandler {
@@ -161,6 +176,43 @@ func (h *ARPHandler) GetPaymentModeTransactions(c *gin.Context) {
 		return
 	}
 	response.OK(c, "Payment mode transactions fetched successfully", transactions)
+}
+
+func (h *ARPHandler) RecordManualTransaction(c *gin.Context) {
+	var req manualFinanceTransactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	transactionDate, err := time.Parse(time.RFC3339, strings.TrimSpace(req.TransactionDate))
+	if err != nil {
+		if parsedDate, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.TransactionDate)); parseErr == nil {
+			transactionDate = parsedDate
+		} else {
+			response.Fail(c, http.StatusBadRequest, "invalid transaction date")
+			return
+		}
+	}
+
+	entry, err := h.service.RecordManualTransaction(
+		req.Direction,
+		req.PaymentMode,
+		req.ReferenceID,
+		req.ReferenceLabel,
+		req.PartyID,
+		req.PartyName,
+		req.PartyType,
+		req.Remarks,
+		req.Amount,
+		transactionDate,
+	)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Created(c, "Manual transaction recorded successfully", entry)
 }
 
 func getAuthenticatedUserID(c *gin.Context) (uuid.UUID, bool) {
