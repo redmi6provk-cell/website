@@ -10,23 +10,23 @@ const slides = [
     id: 1,
     title: "Daily essentials with a calmer shopping flow",
     subtitle: "Groceries, household staples, and repeat buys arranged for quick scanning and faster ordering.",
-    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1074",
-    accent: "Fresh stock"
+    image: "/images/2.png",
+    accent: "Fresh stock",
   },
   {
     id: 2,
     title: "Snacks, drinks, and pantry picks in one clear catalog",
     subtitle: "Browse fast-moving products without visual clutter and move from discovery to cart in fewer steps.",
     image: "/images/vibrant-fmcg-products-on-display.webp",
-    accent: "Popular picks"
+    accent: "Popular picks",
   },
   {
     id: 3,
     title: "Personal care and home care, kept simple",
     subtitle: "A focused storefront for recurring household purchases, with pricing and availability kept easy to read.",
     image: "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=1000",
-    accent: "Everyday use"
-  }
+    accent: "Everyday use",
+  },
 ];
 
 export default function Banner() {

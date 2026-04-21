@@ -30,6 +30,20 @@ type manualFinanceTransactionRequest struct {
 	Remarks         string  `json:"remarks"`
 }
 
+type updateInvoiceRequest struct {
+	InvoiceNo   string  `json:"invoice_no"`
+	InvoiceDate string  `json:"invoice_date"`
+	DueDate     string  `json:"due_date"`
+	TotalAmount float64 `json:"total_amount"`
+}
+
+type updatePaymentRequest struct {
+	PaymentDate string  `json:"payment_date"`
+	Amount      float64 `json:"amount"`
+	PaymentMode string  `json:"payment_mode"`
+	Remarks     string  `json:"remarks"`
+}
+
 func NewARPHandler(service *services.ARPService) *ARPHandler {
 	return &ARPHandler{service: service}
 }
@@ -115,6 +129,58 @@ func (h *ARPHandler) CreateInvoice(c *gin.Context) {
 	response.Created(c, "Invoice created successfully", invoice)
 }
 
+func (h *ARPHandler) UpdateInvoice(c *gin.Context) {
+	invoiceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "invalid invoice id")
+		return
+	}
+
+	var req updateInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	invoiceDate, err := time.Parse(time.RFC3339, strings.TrimSpace(req.InvoiceDate))
+	if err != nil {
+		if parsedDate, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.InvoiceDate)); parseErr == nil {
+			invoiceDate = parsedDate
+		} else {
+			response.Fail(c, http.StatusBadRequest, "invalid invoice date")
+			return
+		}
+	}
+
+	dueDate, err := time.Parse(time.RFC3339, strings.TrimSpace(req.DueDate))
+	if err != nil {
+		if parsedDate, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.DueDate)); parseErr == nil {
+			dueDate = parsedDate
+		} else {
+			response.Fail(c, http.StatusBadRequest, "invalid due date")
+			return
+		}
+	}
+
+	existing, err := h.service.GetInvoice(invoiceID.String())
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	existing.InvoiceNo = strings.TrimSpace(req.InvoiceNo)
+	existing.InvoiceDate = invoiceDate
+	existing.DueDate = dueDate
+	existing.TotalAmount = req.TotalAmount
+
+	if err := h.service.UpdateInvoice(existing); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Invoice updated successfully", existing)
+}
+
 // Payments
 func (h *ARPHandler) RecordPayment(c *gin.Context) {
 	var payment models.Payment
@@ -137,6 +203,48 @@ func (h *ARPHandler) RecordPayment(c *gin.Context) {
 	}
 
 	response.Created(c, "Payment recorded successfully", payment)
+}
+
+func (h *ARPHandler) UpdatePayment(c *gin.Context) {
+	paymentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "invalid payment id")
+		return
+	}
+
+	var req updatePaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	paymentDate, err := time.Parse(time.RFC3339, strings.TrimSpace(req.PaymentDate))
+	if err != nil {
+		if parsedDate, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.PaymentDate)); parseErr == nil {
+			paymentDate = parsedDate
+		} else {
+			response.Fail(c, http.StatusBadRequest, "invalid payment date")
+			return
+		}
+	}
+
+	existing, err := h.service.GetPayment(paymentID.String())
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	existing.PaymentDate = paymentDate
+	existing.Amount = req.Amount
+	existing.PaymentMode = strings.TrimSpace(req.PaymentMode)
+	existing.Remarks = strings.TrimSpace(req.Remarks)
+
+	if err := h.service.UpdatePayment(existing); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Payment updated successfully", existing)
 }
 
 // Ledger & Summary
@@ -213,6 +321,44 @@ func (h *ARPHandler) RecordManualTransaction(c *gin.Context) {
 	}
 
 	response.Created(c, "Manual transaction recorded successfully", entry)
+}
+
+func (h *ARPHandler) UpdateManualTransaction(c *gin.Context) {
+	var req manualFinanceTransactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	transactionDate, err := time.Parse(time.RFC3339, strings.TrimSpace(req.TransactionDate))
+	if err != nil {
+		if parsedDate, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.TransactionDate)); parseErr == nil {
+			transactionDate = parsedDate
+		} else {
+			response.Fail(c, http.StatusBadRequest, "invalid transaction date")
+			return
+		}
+	}
+
+	entry, err := h.service.UpdateManualTransaction(
+		c.Param("id"),
+		req.Direction,
+		req.PaymentMode,
+		req.ReferenceID,
+		req.ReferenceLabel,
+		req.PartyID,
+		req.PartyName,
+		req.PartyType,
+		req.Remarks,
+		req.Amount,
+		transactionDate,
+	)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Manual transaction updated successfully", entry)
 }
 
 func getAuthenticatedUserID(c *gin.Context) (uuid.UUID, bool) {

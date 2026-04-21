@@ -25,6 +25,8 @@ type ledgerTransactionRow struct {
 	Type        string
 	RefID       string
 	InvoiceID   string
+	PaymentID   string
+	SourceModule string
 	Amount      float64
 	PaymentMode string
 	Remarks     string
@@ -218,6 +220,24 @@ func (r *ARPRepository) GetInvoiceByID(id string) (*models.Invoice, error) {
 	return &invoice, err
 }
 
+func (r *ARPRepository) UpdateInvoice(invoice *models.Invoice) error {
+	return r.db.Model(&models.Invoice{}).
+		Where("invoice_id = ?", invoice.InvoiceID).
+		Updates(map[string]interface{}{
+			"invoice_no":   invoice.InvoiceNo,
+			"invoice_date": invoice.InvoiceDate,
+			"due_date":     invoice.DueDate,
+			"total_amount": invoice.TotalAmount,
+			"status":       invoice.Status,
+		}).Error
+}
+
+func (r *ARPRepository) GetPaymentByID(id string) (*models.Payment, error) {
+	var payment models.Payment
+	err := r.db.First(&payment, "payment_id = ?", id).Error
+	return &payment, err
+}
+
 // Payments
 func (r *ARPRepository) RecordPayment(payment *models.Payment) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
@@ -265,6 +285,60 @@ func (r *ARPRepository) RecordPayment(payment *models.Payment) error {
 		}
 
 		return nil
+	})
+}
+
+func (r *ARPRepository) UpdatePayment(payment *models.Payment) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var existing models.Payment
+		if err := tx.First(&existing, "payment_id = ?", payment.PaymentID).Error; err != nil {
+			return err
+		}
+
+		var invoice models.Invoice
+		if err := tx.First(&invoice, "invoice_id = ?", existing.InvoiceID).Error; err != nil {
+			return err
+		}
+
+		var totalOtherPaid float64
+		if err := tx.Model(&models.Payment{}).
+			Where("invoice_id = ? AND payment_id <> ?", existing.InvoiceID, existing.PaymentID).
+			Select("COALESCE(SUM(amount), 0)").
+			Scan(&totalOtherPaid).Error; err != nil {
+			return err
+		}
+
+		remainingCapacity := invoice.TotalAmount - totalOtherPaid
+		if payment.Amount <= 0 {
+			return errors.New("payment amount must be greater than zero")
+		}
+		if payment.Amount > remainingCapacity {
+			return errors.New("payment amount exceeds remaining outstanding balance")
+		}
+
+		if err := tx.Model(&models.Payment{}).
+			Where("payment_id = ?", existing.PaymentID).
+			Updates(map[string]interface{}{
+				"payment_date": payment.PaymentDate,
+				"amount":       payment.Amount,
+				"payment_mode": payment.PaymentMode,
+				"remarks":      payment.Remarks,
+			}).Error; err != nil {
+			return err
+		}
+
+		newTotalPaid := totalOtherPaid + payment.Amount
+		newStatus := "unpaid"
+		if newTotalPaid > 0 && newTotalPaid < invoice.TotalAmount {
+			newStatus = "partially_paid"
+		}
+		if newTotalPaid >= invoice.TotalAmount {
+			newStatus = "paid"
+		}
+
+		return tx.Model(&models.Invoice{}).
+			Where("invoice_id = ?", invoice.InvoiceID).
+			Update("status", newStatus).Error
 	})
 }
 
@@ -518,6 +592,7 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			Type:      row.Type,
 			RefID:     row.RefID,
 			InvoiceID: row.InvoiceID,
+			SourceModule: "invoice",
 			Amount:    row.Amount,
 			Remarks:   row.Remarks,
 		})
@@ -530,6 +605,7 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			'payment' AS type,
 			i.invoice_no AS ref_id,
 			p.invoice_id::text AS invoice_id,
+			p.payment_id::text AS payment_id,
 			p.amount AS amount,
 			p.payment_mode AS payment_mode,
 			COALESCE(NULLIF(TRIM(p.remarks), ''), 'Invoice payment received') AS remarks
@@ -545,6 +621,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			Type:        row.Type,
 			RefID:       row.RefID,
 			InvoiceID:   row.InvoiceID,
+			PaymentID:   row.PaymentID,
+			SourceModule: "arp_payment",
 			Amount:      row.Amount,
 			PaymentMode: row.PaymentMode,
 			Remarks:     row.Remarks,
@@ -573,6 +651,7 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 				Type:      row.Type,
 				RefID:     row.RefID,
 				InvoiceID: row.InvoiceID,
+				SourceModule: "purchase",
 				Amount:    row.Amount,
 				Remarks:   row.Remarks,
 			})
@@ -601,6 +680,7 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 				Type:      row.Type,
 				RefID:     row.RefID,
 				InvoiceID: row.InvoiceID,
+				SourceModule: "offline_sale",
 				Amount:    row.Amount,
 				Remarks:   row.Remarks,
 			})
@@ -614,6 +694,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			'' AS type,
 			COALESCE(NULLIF(TRIM(reference_label), ''), NULLIF(TRIM(reference_id), ''), source_module) AS ref_id,
 			'' AS invoice_id,
+			id::text AS payment_id,
+			source_module,
 			amount AS amount,
 			payment_mode AS payment_mode,
 			COALESCE(NULLIF(TRIM(remarks), ''), 'Payment recorded') AS remarks,
@@ -636,6 +718,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			Type:        transactionType,
 			RefID:       row.RefID,
 			InvoiceID:   row.InvoiceID,
+			PaymentID:   row.PaymentID,
+			SourceModule: row.SourceModule,
 			Amount:      row.Amount,
 			PaymentMode: row.PaymentMode,
 			Remarks:     row.Remarks,

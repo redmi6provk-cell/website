@@ -50,6 +50,17 @@ type PublicStoreSettings = {
   free_delivery_above?: number;
 };
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function getSyncableCartPayload(items: Array<{ product: { id: string }; quantity: number }>) {
+  return items
+    .filter((item) => item?.product?.id && uuidPattern.test(item.product.id) && Number(item.quantity) > 0)
+    .map((item) => ({
+      product_id: item.product.id,
+      quantity: Math.max(1, Math.floor(Number(item.quantity))),
+    }));
+}
+
 type OrderSuccessDetails = {
   customerName: string;
   deliveryMethod: "delivery" | "pickup";
@@ -238,10 +249,7 @@ export default function CheckoutPage() {
           : `${data.fullName}, ${data.phone}, ${data.addressLine}, ${data.city}, ${data.state} - ${data.pincode} | Payment: ${paymentLabel}`;
 
       await api.post("/cart/sync", {
-        items: items.map((item) => ({
-          product_id: item.product.id,
-          quantity: item.quantity,
-        })),
+        items: getSyncableCartPayload(items),
       });
 
       await api.post("/orders", {

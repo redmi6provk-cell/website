@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronLeft, Landmark, ReceiptText } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronLeft, Landmark, Pencil, ReceiptText } from "lucide-react";
 import type { AxiosError } from "axios";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -38,7 +38,9 @@ type PaymentTransaction = {
   remarks: string;
   reference_id: string;
   reference_label: string;
+  party_id: string;
   party_name: string;
+  party_type: string;
   source_module: string;
   direction: string;
 };
@@ -52,6 +54,8 @@ type PaymentForm = {
   amount: string;
   remarks: string;
 };
+
+type ManualTransactionFilter = "all" | "in" | "out";
 
 const todayValue = () => new Date().toISOString().slice(0, 10);
 
@@ -98,6 +102,8 @@ export default function AdminPaymentsPage() {
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<string[]>(["cash"]);
   const [cashBalance, setCashBalance] = useState(0);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [manualTransactionFilter, setManualTransactionFilter] = useState<ManualTransactionFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +134,7 @@ export default function AdminPaymentsPage() {
       const bankAccounts: BankAccount[] = Array.isArray(summaryRes.data.data?.bank_accounts)
         ? summaryRes.data.data.bank_accounts
         : [];
+
       setCashBalance(Number(summaryRes.data.data?.cash_total || 0));
       setPaymentOptions([
         "cash",
@@ -160,7 +167,19 @@ export default function AdminPaymentsPage() {
     [ledger, form.partyId]
   );
 
-  const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
+  const manualTransactions = useMemo(
+    () => transactions.filter((item) => item.source_module === "manual_payment"),
+    [transactions]
+  );
+
+  const filteredManualTransactions = useMemo(() => {
+    if (manualTransactionFilter === "all") {
+      return manualTransactions;
+    }
+
+    return manualTransactions.filter((item) => item.direction === manualTransactionFilter);
+  }, [manualTransactions, manualTransactionFilter]);
+
   const isPaymentIn = form.direction === "in";
   const theme = isPaymentIn
     ? {
@@ -183,10 +202,28 @@ export default function AdminPaymentsPage() {
       };
 
   const resetForm = () => {
+    setEditingTransactionId(null);
+    setFormError(null);
     setForm({
       ...emptyForm(),
       paymentMode: paymentOptions[0] || "cash",
     });
+  };
+
+  const handleEditTransaction = (transaction: PaymentTransaction) => {
+    setEditingTransactionId(transaction.payment_id);
+    setFormError(null);
+    setSuccessMessage(null);
+    setForm({
+      direction: transaction.direction === "in" ? "in" : "out",
+      partyId: transaction.party_id || "",
+      paymentMode: transaction.payment_mode || paymentOptions[0] || "cash",
+      transactionDate: transaction.payment_date.slice(0, 10),
+      receiptNo: transaction.reference_id || "",
+      amount: String(transaction.amount || ""),
+      remarks: transaction.remarks || "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -218,7 +255,7 @@ export default function AdminPaymentsPage() {
 
     setIsSubmitting(true);
     try {
-      await api.post("/admin/arp/manual-transactions", {
+      const payload = {
         direction: form.direction,
         payment_mode: form.paymentMode,
         amount,
@@ -229,9 +266,19 @@ export default function AdminPaymentsPage() {
         party_name: selectedParty.name,
         party_type: selectedParty.type,
         remarks: form.remarks.trim(),
-      });
+      };
 
-      setSuccessMessage(`${formatDirectionLabel(form.direction)} saved successfully.`);
+      if (editingTransactionId) {
+        await api.put(`/admin/arp/manual-transactions/${editingTransactionId}`, payload);
+      } else {
+        await api.post("/admin/arp/manual-transactions", payload);
+      }
+
+      setSuccessMessage(
+        editingTransactionId
+          ? `${formatDirectionLabel(form.direction)} updated successfully.`
+          : `${formatDirectionLabel(form.direction)} saved successfully.`
+      );
       resetForm();
       await loadPage();
     } catch (error: unknown) {
@@ -282,7 +329,9 @@ export default function AdminPaymentsPage() {
               <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="text-[11px] font-black uppercase tracking-[0.24em] text-white/70">Transaction Form</div>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight">{formatDirectionLabel(form.direction)}</h2>
+                  <h2 className="mt-2 text-3xl font-black tracking-tight">
+                    {editingTransactionId ? `Edit ${formatDirectionLabel(form.direction)}` : formatDirectionLabel(form.direction)}
+                  </h2>
                   <p className={`mt-2 max-w-md text-sm ${theme.muted}`}>
                     {isPaymentIn
                       ? "Incoming collection ko record karo aur party balance ko update rakho."
@@ -294,7 +343,7 @@ export default function AdminPaymentsPage() {
                     type="button"
                     onClick={() => setForm((current) => ({ ...current, direction: "out" }))}
                     className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] transition ${
-                      isPaymentIn ? theme.activeOut : theme.activeOut
+                      theme.activeOut
                     }`}
                   >
                     Payment Out
@@ -303,7 +352,7 @@ export default function AdminPaymentsPage() {
                     type="button"
                     onClick={() => setForm((current) => ({ ...current, direction: "in" }))}
                     className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] transition ${
-                      isPaymentIn ? theme.activeIn : theme.activeIn
+                      theme.activeIn
                     }`}
                   >
                     Payment In
@@ -433,10 +482,10 @@ export default function AdminPaymentsPage() {
               {formError ? <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div> : null}
               <div className="mt-8 flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-end">
                 <Button type="button" variant="outline" className="h-12 rounded-2xl px-5" onClick={resetForm}>
-                  Reset
+                  {editingTransactionId ? "Cancel Edit" : "Reset"}
                 </Button>
                 <Button type="submit" className={`h-12 rounded-2xl px-8 ${theme.button}`} disabled={isSubmitting}>
-                  {isSubmitting ? "Saving..." : "Save"}
+                  {isSubmitting ? (editingTransactionId ? "Updating..." : "Saving...") : editingTransactionId ? "Update" : "Save"}
                 </Button>
               </div>
             </form>
@@ -449,7 +498,7 @@ export default function AdminPaymentsPage() {
                   <div>
                     <div className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500">Payment In</div>
                     <div className="mt-2 text-3xl font-black text-zinc-900">
-                      {recentTransactions.filter((item) => item.direction === "in").length}
+                      {transactions.filter((item) => item.direction === "in").length}
                     </div>
                   </div>
                   <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
@@ -463,50 +512,13 @@ export default function AdminPaymentsPage() {
                   <div>
                     <div className="text-[11px] font-black uppercase tracking-[0.18em] text-rose-500">Payment Out</div>
                     <div className="mt-2 text-3xl font-black text-zinc-900">
-                      {recentTransactions.filter((item) => item.direction === "out").length}
+                      {transactions.filter((item) => item.direction === "out").length}
                     </div>
                   </div>
                   <div className="rounded-2xl bg-rose-50 p-3 text-rose-600">
                     <ArrowUpRight className="h-5 w-5" />
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
-              <div className="border-b border-zinc-100 px-5 py-4">
-                <div className="text-lg font-black text-zinc-900">Recent Entries</div>
-                <div className="mt-1 text-sm text-zinc-500">Latest payment in/out records yahin dikh rahe hain.</div>
-              </div>
-              <div className="divide-y divide-zinc-100">
-                {recentTransactions.length === 0 ? (
-                  <div className="px-5 py-8 text-sm text-zinc-500">Abhi tak koi payment transaction nahi hai.</div>
-                ) : (
-                  recentTransactions.map((item) => (
-                    <div key={item.payment_id} className="px-5 py-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="text-sm font-bold text-zinc-900">
-                            {item.party_name || item.reference_label || "Direct entry"}
-                          </div>
-                          <div className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-400">
-                            {formatDate(item.payment_date)} • {formatPaymentLabel(item.payment_mode)}
-                          </div>
-                          <div className="mt-2 text-sm text-zinc-500">{item.remarks || "No description added"}</div>
-                        </div>
-                        <div className={`shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.16em] ${
-                          item.direction === "in" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                        }`}>
-                          {item.direction}
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <div className="text-zinc-400">{item.reference_id || item.source_module}</div>
-                        <div className="font-bold text-zinc-900">{formatCurrency(item.amount)}</div>
-                      </div>
-                    </div>
-                  ))
-                )}
               </div>
             </div>
 
@@ -531,12 +543,103 @@ export default function AdminPaymentsPage() {
             </div>
           </aside>
         </div>
+
         <SuccessPopup
           isOpen={Boolean(successMessage)}
           message={successMessage || ""}
           onClose={() => setSuccessMessage(null)}
           title="Form Submitted"
         />
+
+        <section className="mt-6 overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-zinc-100 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-black text-zinc-900">Manual Payment Entries</h2>
+              <p className="mt-1 text-sm text-zinc-500">Yahan sirf Payment In/Out form se save ki gayi manual entries show hongi.</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="inline-flex rounded-full bg-zinc-100 p-1">
+                {(["all", "in", "out"] as ManualTransactionFilter[]).map((filterValue) => (
+                  <button
+                    key={filterValue}
+                    type="button"
+                    onClick={() => setManualTransactionFilter(filterValue)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] transition ${
+                      manualTransactionFilter === filterValue
+                        ? "bg-white text-zinc-900 shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-900"
+                    }`}
+                  >
+                    {filterValue === "all" ? "All" : formatDirectionLabel(filterValue)}
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-zinc-600">
+                {filteredManualTransactions.length} records
+              </div>
+            </div>
+          </div>
+
+          {filteredManualTransactions.length === 0 ? (
+            <div className="px-5 py-8 text-sm text-zinc-500">Abhi tak koi payment entry nahi hai.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-zinc-100 text-sm">
+                <thead className="bg-zinc-50">
+                  <tr className="text-left text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                    <th className="px-5 py-3">Date</th>
+                    <th className="px-5 py-3">Party</th>
+                    <th className="px-5 py-3">Type</th>
+                    <th className="px-5 py-3">Mode</th>
+                    <th className="px-5 py-3">Reference</th>
+                    <th className="px-5 py-3">Amount</th>
+                    <th className="px-5 py-3">Remarks</th>
+                    <th className="px-5 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {filteredManualTransactions.map((item) => {
+                    return (
+                      <tr key={item.payment_id} className="align-top">
+                        <td className="px-5 py-4 whitespace-nowrap text-zinc-600">{formatDate(item.payment_date)}</td>
+                        <td className="px-5 py-4">
+                          <div className="font-bold text-zinc-900">{item.party_name || "Direct entry"}</div>
+                          <div className="mt-1 text-xs uppercase tracking-[0.14em] text-zinc-400">{item.party_type || "N/A"}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.16em] ${
+                            item.direction === "in" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                          }`}>
+                            {formatDirectionLabel(item.direction)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-zinc-600">{formatPaymentLabel(item.payment_mode)}</td>
+                        <td className="px-5 py-4 text-zinc-600">
+                          <div>{item.reference_id || "-"}</div>
+                          <div className="mt-1 text-xs text-zinc-400">{item.reference_label || item.source_module}</div>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap font-bold text-zinc-900">{formatCurrency(item.amount)}</td>
+                        <td className="px-5 py-4 text-zinc-600">{item.remarks || "-"}</td>
+                        <td className="px-5 py-4 text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => handleEditTransaction(item)}
+                            leftIcon={Pencil}
+                          >
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

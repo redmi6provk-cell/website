@@ -4,6 +4,7 @@ import (
 	"backend/internal/models"
 	"strings"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -50,6 +51,24 @@ func (r *FinanceTransactionRepository) Replace(entry *models.FinanceTransaction)
 
 func (r *FinanceTransactionRepository) Create(entry *models.FinanceTransaction) error {
 	return r.db.Create(entry).Error
+}
+
+func (r *FinanceTransactionRepository) GetByID(id string) (*models.FinanceTransaction, error) {
+	parsedID, err := uuid.Parse(strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+
+	var entry models.FinanceTransaction
+	if err := r.db.Where("id = ?", parsedID).First(&entry).Error; err != nil {
+		return nil, err
+	}
+
+	return &entry, nil
+}
+
+func (r *FinanceTransactionRepository) Update(entry *models.FinanceTransaction) error {
+	return r.db.Save(entry).Error
 }
 
 func (r *FinanceTransactionRepository) DeleteBySource(sourceModule string, sourceID string) error {

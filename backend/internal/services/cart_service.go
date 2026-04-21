@@ -86,10 +86,10 @@ func (s *CartService) SyncCart(userID uuid.UUID, items []models.Cart) error {
 	for _, item := range items {
 		product, err := s.productRepo.GetByID(item.ProductID.String(), true)
 		if err != nil {
-			return errors.New("product not found")
+			continue
 		}
 		if !product.IsActive {
-			return errors.New("product is inactive")
+			continue
 		}
 		cappedQuantity := int(math.Min(float64(item.Quantity), float64(product.Stock)))
 		if cappedQuantity <= 0 {

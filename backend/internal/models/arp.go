@@ -74,6 +74,8 @@ type Transaction struct {
 	Type        string    `json:"type"` // invoice, payment
 	RefID       string    `json:"ref_id"`
 	InvoiceID   string    `json:"invoice_id,omitempty"`
+	PaymentID   string    `json:"payment_id,omitempty"`
+	SourceModule string   `json:"source_module,omitempty"`
 	Amount      float64   `json:"amount"`
 	Balance     float64   `json:"balance"`
 	PaymentMode string    `json:"payment_mode,omitempty"`

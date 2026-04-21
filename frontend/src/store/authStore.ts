@@ -3,6 +3,7 @@ import Cookies from "js-cookie";
 import { CartItem, Product, User } from "@/types";
 import { useCartStore } from "@/store/cartStore";
 import api from "@/lib/api";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface AuthState {
   user: User | null;
@@ -28,6 +29,15 @@ function normalizeCartItems(items: CartItem[]) {
       quantity: Math.max(0, Math.min(item.quantity, Math.max(0, item.product.stock))),
     }))
     .filter((item) => item.quantity > 0);
+}
+
+function getSyncableItems(items: CartItem[]) {
+  return items
+    .filter((item) => item?.product?.id && uuidPattern.test(item.product.id) && Number(item.quantity) > 0)
+    .map((item) => ({
+      product_id: item.product.id,
+      quantity: Math.max(1, Math.floor(Number(item.quantity))),
+    }));
 }
 
 async function syncCartAfterAuth(userId: string) {
@@ -75,11 +85,9 @@ async function syncCartAfterAuth(userId: string) {
   }
 
   try {
+    const syncableItems = getSyncableItems(mergedItems);
     await api.post("/cart/sync", {
-      items: mergedItems.map((item) => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-      })),
+      items: syncableItems,
     });
   } catch (error) {
     console.error("Failed to sync merged cart after auth", error);

@@ -8,7 +8,7 @@ import { ArrowRight, ShieldCheck, ShoppingBag, Sparkles, Trash2, Truck } from "l
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/Button";
-import { formatDiscountLabel, getCartPricing, getProductPricing } from "@/lib/pricing";
+import { formatDiscountLabel, getCartPricing, getProductPricing, getSortedDiscounts } from "@/lib/pricing";
 import { resolveAssetUrl, shouldBypassImageOptimization } from "@/lib/images";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
 import api from "@/lib/api";
@@ -162,6 +162,7 @@ export default function CartPage() {
               <div className="space-y-4">
                 {items.map((item) => {
                   const pricing = getProductPricing(item.product, item.quantity);
+                  const slabs = getSortedDiscounts(item.product);
                   const imageSrc = resolveAssetUrl(
                     item.product.image_url ||
                     "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200"
@@ -210,6 +211,30 @@ export default function CartPage() {
                             <p className="mt-1 text-xs text-zinc-500 sm:mt-2 sm:text-sm">
                               {item.product.unit} | Minimum order {pricing.minimumOrderQuantity}
                             </p>
+                            {slabs.length > 0 ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {slabs.map((slab, index) => {
+                                  const isActive =
+                                    pricing.appliedDiscount?.min_quantity === slab.min_quantity &&
+                                    pricing.appliedDiscount?.max_quantity === slab.max_quantity &&
+                                    pricing.appliedDiscount?.discount_type === slab.discount_type &&
+                                    pricing.appliedDiscount?.discount_value === slab.discount_value;
+
+                                  return (
+                                    <span
+                                      key={`${slab.min_quantity}-${slab.max_quantity ?? "plus"}-${index}`}
+                                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] sm:px-3 sm:text-[11px] ${
+                                        isActive
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : "bg-zinc-100 text-zinc-600"
+                                      }`}
+                                    >
+                                      {formatDiscountLabel(slab)}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
                             {!pricing.appliedDiscount && pricing.nextDiscount && (
                               <p className="mt-2 hidden items-center gap-2 text-sm font-medium text-zinc-600 sm:inline-flex">
                                 <Sparkles className="h-4 w-4 text-amber-500" />

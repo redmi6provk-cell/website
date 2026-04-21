@@ -237,7 +237,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
 
         <main className="min-w-0 px-3 pt-0 pb-8 sm:px-6 lg:ml-72 lg:px-8 lg:pb-8">
-          <div className="sticky top-4 z-30 mb-6 hidden items-center justify-between gap-4 rounded-[1.75rem] border border-zinc-200/80 bg-white/92 px-5 py-4 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.25)] backdrop-blur lg:flex">
+          <div className="sticky top-4 z-30 mb-6 hidden items-center justify-between gap-4 rounded-[1.75rem] border border-zinc-200/80 bg-white/2 px-5 py-4 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.25)] backdrop-blur lg:flex">
             <div className="flex min-w-0 items-center gap-4">
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
                 <BarChart3 className="h-5 w-5" />

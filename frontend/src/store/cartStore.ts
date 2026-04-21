@@ -5,9 +5,19 @@ import { getCartPricing } from "@/lib/pricing";
 import api from "@/lib/api";
 
 const GUEST_CART_KEY = "guest";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function clampQuantityToStock(product: Product, quantity: number) {
   return Math.max(0, Math.min(quantity, Math.max(0, product.stock)));
+}
+
+function getSyncableItems(items: CartItem[]) {
+  return items
+    .filter((item) => item?.product?.id && uuidPattern.test(item.product.id) && Number(item.quantity) > 0)
+    .map((item) => ({
+      product_id: item.product.id,
+      quantity: Math.max(1, Math.floor(Number(item.quantity))),
+    }));
 }
 
 async function syncServerCart(ownerId: string, items: CartItem[]) {
@@ -16,11 +26,9 @@ async function syncServerCart(ownerId: string, items: CartItem[]) {
   }
 
   try {
+    const syncableItems = getSyncableItems(items);
     await api.post("/cart/sync", {
-      items: items.map((item) => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-      })),
+      items: syncableItems,
     });
   } catch (error) {
     console.error("Failed to sync cart to server", error);
