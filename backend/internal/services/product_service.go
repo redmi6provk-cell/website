@@ -33,6 +33,10 @@ func (s *ProductService) GetByIDForAdmin(id string) (*models.Product, error) {
 	return s.repo.GetByID(id, true)
 }
 
+func (s *ProductService) GetTransactions(id string) ([]models.ProductTransaction, error) {
+	return s.repo.GetTransactions(id)
+}
+
 func (s *ProductService) Create(product *models.Product) error {
 	product.NormalizePricingRules()
 	if err := product.ValidatePricingRules(); err != nil {

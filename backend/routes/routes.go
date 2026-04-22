@@ -84,6 +84,7 @@ func SetupRoutes(
 		adminProducts.Use(middleware.RequireRoles(models.RoleAdmin, models.RoleSuperAdmin))
 		{
 			adminProducts.GET("", productHandler.GetAdminProducts)
+			adminProducts.GET("/:id/transactions", productHandler.GetProductTransactions)
 			adminProducts.POST("", productHandler.CreateProduct)
 			adminProducts.PUT("/:id", productHandler.UpdateProduct)
 			adminProducts.PUT("/:id/active", productHandler.UpdateProductActive)
@@ -97,6 +98,9 @@ func SetupRoutes(
 		{
 			adminOrders.GET("", orderHandler.GetAllOrders)
 			adminOrders.PUT("/:id/status", orderHandler.UpdateOrderStatus)
+			adminOrders.PUT("/:id/items", orderHandler.UpdateOrderItems)
+			adminOrders.PUT("/:id/payment", orderHandler.UpdateOrderPayment)
+			adminOrders.PUT("/:id/payment-breakdown", orderHandler.UpdateOrderPaymentBreakdown)
 			adminOrders.PUT("/:id/invoice-number", orderHandler.UpdateOrderInvoiceNumber)
 			adminOrders.GET("/next-invoice-number", invoiceSequenceHandler.GetNextSalesInvoiceNumber)
 		}
@@ -182,6 +186,7 @@ func SetupRoutes(
 			adminOfflineSales.GET("", offlineSaleHandler.GetOfflineSales)
 			adminOfflineSales.POST("", offlineSaleHandler.CreateOfflineSale)
 			adminOfflineSales.PUT("/:id", offlineSaleHandler.UpdateOfflineSale)
+			adminOfflineSales.PUT("/:id/payment-breakdown", offlineSaleHandler.UpdateOfflineSalePaymentBreakdown)
 			adminOfflineSales.DELETE("/:id", offlineSaleHandler.DeleteOfflineSale)
 			adminOfflineSales.GET("/next-invoice-number", invoiceSequenceHandler.GetNextSalesInvoiceNumber)
 		}

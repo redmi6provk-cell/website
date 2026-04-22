@@ -11,6 +11,7 @@ import (
 	"backend/internal/repository"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type OrderService struct {
@@ -179,6 +180,16 @@ type UpdateOrderStatusInput struct {
 	Notes                   string
 	PaymentCollectionMethod string
 	ReceivedAmount          *float64
+}
+
+type UpdateOrderItemsInput struct {
+	Items     []UpdateOrderItemInput
+	ChangedBy *uuid.UUID
+}
+
+type UpdateOrderItemInput struct {
+	ID       uuid.UUID
+	Quantity int
 }
 
 func (s *OrderService) UpdateStatus(orderID uuid.UUID, input UpdateOrderStatusInput, changedBy *uuid.UUID) error {
@@ -360,17 +371,237 @@ func (s *OrderService) UpdateInvoiceNumber(orderID uuid.UUID, invoiceNumber stri
 	return nil
 }
 
+func (s *OrderService) UpdatePaymentDetails(orderID uuid.UUID, receivedAmount float64, collectionMethod string) error {
+	order, err := s.orderRepo.GetByID(orderID)
+	if err != nil {
+		return err
+	}
+
+	if receivedAmount < 0 {
+		return errors.New("received amount cannot be negative")
+	}
+	if receivedAmount > order.Total {
+		return errors.New("received amount cannot exceed total order amount")
+	}
+
+	method := strings.TrimSpace(collectionMethod)
+	if receivedAmount > 0 && method == "" {
+		method = strings.TrimSpace(order.PaymentCollectionMethod)
+	}
+	if receivedAmount > 0 && method == "" {
+		if strings.EqualFold(order.PaymentMode, models.OrderPaymentModeQR) {
+			method = "QR"
+		} else {
+			method = "cash"
+		}
+	}
+	if receivedAmount == 0 {
+		method = ""
+	}
+
+	if s.settingsRepo != nil && order.ReceivedAmount > 0 && strings.TrimSpace(order.PaymentCollectionMethod) != "" {
+		if err := s.settingsRepo.AdjustPaymentBalance(-order.ReceivedAmount, order.PaymentCollectionMethod); err != nil {
+			return err
+		}
+	}
+	if s.settingsRepo != nil && receivedAmount > 0 && method != "" {
+		if err := s.settingsRepo.ApplyCollectedPayment(receivedAmount, method); err != nil {
+			return err
+		}
+	}
+
+	paymentStatus := models.OrderPaymentStatusUnpaid
+	if receivedAmount >= order.Total && order.Total > 0 {
+		paymentStatus = models.OrderPaymentStatusPaid
+	}
+
+	if err := s.orderRepo.UpdatePaymentFields(orderID, paymentStatus, receivedAmount, method); err != nil {
+		return err
+	}
+
+	order.ReceivedAmount = receivedAmount
+	order.PaymentCollectionMethod = method
+	order.PaymentStatus = paymentStatus
+	return s.syncFinanceTransaction(order, method)
+}
+
+func (s *OrderService) UpdatePaymentBreakdown(orderID uuid.UUID, breakdown []models.PaymentBreakdownEntry) error {
+	order, err := s.orderRepo.GetByID(orderID)
+	if err != nil {
+		return err
+	}
+
+	normalized := normalizePaymentBreakdown(breakdown)
+	receivedAmount := totalPaymentBreakdown(normalized)
+	if receivedAmount > order.Total {
+		return errors.New("received amount cannot exceed total order amount")
+	}
+
+	existingBreakdown := normalizePaymentBreakdown(parsePaymentBreakdown(order.PaymentBreakdownJSON))
+	if len(existingBreakdown) == 0 && order.ReceivedAmount > 0 {
+		mode := strings.TrimSpace(order.PaymentCollectionMethod)
+		if mode == "" {
+			if strings.EqualFold(order.PaymentMode, models.OrderPaymentModeQR) {
+				mode = "QR"
+			} else {
+				mode = "cash"
+			}
+		}
+		existingBreakdown = []models.PaymentBreakdownEntry{{Mode: mode, Amount: order.ReceivedAmount}}
+	}
+
+	if s.settingsRepo != nil {
+		for _, entry := range existingBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(-entry.Amount, entry.Mode); err != nil {
+				return err
+			}
+		}
+		for _, entry := range normalized {
+			if err := s.settingsRepo.ApplyCollectedPayment(entry.Amount, entry.Mode); err != nil {
+				return err
+			}
+		}
+	}
+
+	paymentStatus := models.OrderPaymentStatusUnpaid
+	if receivedAmount >= order.Total && order.Total > 0 {
+		paymentStatus = models.OrderPaymentStatusPaid
+	}
+	paymentMethod := primaryPaymentMode(normalized, "")
+
+	order.ReceivedAmount = receivedAmount
+	order.PaymentCollectionMethod = paymentMethod
+	order.PaymentStatus = paymentStatus
+	order.PaymentBreakdownJSON = serializePaymentBreakdown(normalized)
+	order.PaymentBreakdown = normalized
+
+	if err := s.orderRepo.UpdatePaymentFields(orderID, paymentStatus, receivedAmount, paymentMethod); err != nil {
+		return err
+	}
+	if err := s.orderRepo.UpdatePaymentBreakdown(orderID, order.PaymentBreakdownJSON); err != nil {
+		return err
+	}
+
+	return s.syncFinanceTransaction(order, paymentMethod)
+}
+
+func (s *OrderService) UpdateItems(orderID uuid.UUID, input UpdateOrderItemsInput) (*models.Order, error) {
+	order, err := s.orderRepo.GetByID(orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(input.Items) == 0 {
+		return nil, errors.New("at least one order item is required")
+	}
+	if len(input.Items) != len(order.Items) {
+		return nil, errors.New("all existing order items must be provided")
+	}
+
+	existingItems := make(map[uuid.UUID]models.OrderItem, len(order.Items))
+	for _, item := range order.Items {
+		existingItems[item.ID] = item
+	}
+
+	updatedItems := make([]models.OrderItem, 0, len(input.Items))
+	stockAdjustments := make(map[uuid.UUID]int, len(input.Items))
+	var subtotal float64
+
+	for _, payloadItem := range input.Items {
+		currentItem, ok := existingItems[payloadItem.ID]
+		if !ok {
+			return nil, errors.New("invalid order item provided")
+		}
+		if payloadItem.Quantity < 1 {
+			return nil, errors.New("quantity must be at least 1")
+		}
+		if !currentItem.Product.IsActive {
+			return nil, fmt.Errorf("%s is no longer available for sale", currentItem.Product.Name)
+		}
+
+		pricing := currentItem.Product.PricingForQuantity(payloadItem.Quantity)
+		if !pricing.MeetsMinimum {
+			return nil, fmt.Errorf("%s requires minimum %d quantity", currentItem.Product.Name, currentItem.Product.MinimumOrderQuantity)
+		}
+
+		delta := payloadItem.Quantity - currentItem.Quantity
+		if delta > 0 && currentItem.Product.Stock < delta {
+			return nil, fmt.Errorf("%s only has %d extra units in stock", currentItem.Product.Name, currentItem.Product.Stock)
+		}
+
+		stockAdjustments[currentItem.ProductID] -= delta
+		updatedItem := currentItem
+		updatedItem.Quantity = payloadItem.Quantity
+		updatedItem.Price = pricing.FinalUnitPrice
+		updatedItems = append(updatedItems, updatedItem)
+		subtotal += pricing.LineFinalTotal
+		delete(existingItems, payloadItem.ID)
+	}
+
+	if len(existingItems) > 0 {
+		return nil, errors.New("some order items are missing from the update payload")
+	}
+
+	total := subtotal + order.DeliveryCharge
+	if order.ReceivedAmount > total {
+		return nil, errors.New("received amount is higher than the revised order total, please adjust payment first")
+	}
+
+	paymentStatus := order.PaymentStatus
+	if strings.EqualFold(order.PaymentMode, models.OrderPaymentModeCOD) {
+		paymentStatus = models.OrderPaymentStatusUnpaid
+		if order.ReceivedAmount >= total && total > 0 {
+			paymentStatus = models.OrderPaymentStatusPaid
+		}
+	}
+
+	eventNote := fmt.Sprintf("Order items updated by admin. Revised total: Rs. %.2f", total)
+
+	if err := s.orderRepo.UpdateItems(
+		orderID,
+		updatedItems,
+		subtotal,
+		total,
+		paymentStatus,
+		order.ReceivedAmount,
+		order.PaymentCollectionMethod,
+		order.PaymentBreakdownJSON,
+		stockAdjustments,
+		eventNote,
+		order.Status,
+		input.ChangedBy,
+	); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("insufficient stock available for the updated quantity")
+		}
+		return nil, err
+	}
+
+	order.Items = updatedItems
+	order.Subtotal = subtotal
+	order.Total = total
+	order.PaymentStatus = paymentStatus
+	order.StatusEvents = append(order.StatusEvents, models.OrderStatusEvent{
+		ID:        uuid.New(),
+		OrderID:   order.ID,
+		Status:    order.Status,
+		Note:      eventNote,
+		ChangedBy: input.ChangedBy,
+		CreatedAt: time.Now(),
+	})
+
+	if strings.EqualFold(order.PaymentMode, models.OrderPaymentModeCOD) {
+		if err := s.syncFinanceTransaction(order, order.PaymentCollectionMethod); err != nil {
+			return nil, err
+		}
+	}
+
+	return order, nil
+}
+
 func (s *OrderService) syncFinanceTransaction(order *models.Order, paymentMode string) error {
 	if s.financeRepo == nil {
 		return nil
-	}
-
-	mode := paymentMode
-	if mode == "" {
-		mode = order.PaymentCollectionMethod
-	}
-	if mode == "" {
-		mode = order.PaymentMode
 	}
 
 	remarks := order.Notes
@@ -379,7 +610,7 @@ func (s *OrderService) syncFinanceTransaction(order *models.Order, paymentMode s
 	}
 
 	if order.ReceivedAmount <= 0 {
-		return s.financeRepo.DeleteBySource("order_cod", order.ID.String())
+		return s.financeRepo.DeleteBySourcePrefix("order_cod", order.ID.String())
 	}
 
 	partyID := ""
@@ -397,20 +628,37 @@ func (s *OrderService) syncFinanceTransaction(order *models.Order, paymentMode s
 		}
 	}
 
-	return s.financeRepo.Replace(&models.FinanceTransaction{
-		SourceModule:    "order_cod",
-		SourceID:        order.ID.String(),
-		TransactionDate: time.Now(),
-		Direction:       "in",
-		PaymentMode:     mode,
-		Amount:          order.ReceivedAmount,
-		ReferenceID:     order.ID.String(),
-		ReferenceLabel:  s.orderReferenceLabel(order),
-		PartyID:         partyID,
-		PartyName:       order.CustomerName,
-		PartyType:       "customer",
-		Remarks:         remarks,
-	})
+	breakdown := normalizePaymentBreakdown(parsePaymentBreakdown(order.PaymentBreakdownJSON))
+	if len(breakdown) == 0 && order.ReceivedAmount > 0 {
+		mode := paymentMode
+		if mode == "" {
+			mode = order.PaymentCollectionMethod
+		}
+		if mode == "" {
+			mode = order.PaymentMode
+		}
+		breakdown = []models.PaymentBreakdownEntry{{Mode: mode, Amount: order.ReceivedAmount}}
+	}
+
+	entries := make([]models.FinanceTransaction, 0, len(breakdown))
+	for index, entry := range breakdown {
+		entries = append(entries, models.FinanceTransaction{
+			SourceModule:    "order_cod",
+			SourceID:        fmt.Sprintf("%s::%d", order.ID.String(), index),
+			TransactionDate: time.Now(),
+			Direction:       "in",
+			PaymentMode:     entry.Mode,
+			Amount:          entry.Amount,
+			ReferenceID:     order.ID.String(),
+			ReferenceLabel:  s.orderReferenceLabel(order),
+			PartyID:         partyID,
+			PartyName:       order.CustomerName,
+			PartyType:       "customer",
+			Remarks:         remarks,
+		})
+	}
+
+	return s.financeRepo.ReplaceMany("order_cod", order.ID.String(), entries)
 }
 
 func (s *OrderService) orderReferenceLabel(order *models.Order) string {

@@ -107,21 +107,22 @@ func (r *OfflineSaleRepository) Update(sale *models.OfflineSale) error {
 		}
 
 		if err := tx.Model(&models.OfflineSale{}).Where("id = ?", sale.ID).Updates(map[string]interface{}{
-			"bill_number":       sale.BillNumber,
-			"sale_date":         sale.SaleDate,
-			"customer_party_id": sale.CustomerPartyID,
-			"customer_name":     sale.CustomerName,
-			"customer_phone":    sale.CustomerPhone,
-			"shop_name":         sale.ShopName,
-			"payment_mode":      sale.PaymentMode,
-			"notes":             sale.Notes,
-			"subtotal":          sale.Subtotal,
-			"discount_total":    sale.DiscountTotal,
-			"final_total":       sale.FinalTotal,
-			"amount_received":   sale.AmountReceived,
-			"balance_due":       sale.BalanceDue,
-			"status":            sale.Status,
-			"created_by":        sale.CreatedBy,
+			"bill_number":            sale.BillNumber,
+			"sale_date":              sale.SaleDate,
+			"customer_party_id":      sale.CustomerPartyID,
+			"customer_name":          sale.CustomerName,
+			"customer_phone":         sale.CustomerPhone,
+			"shop_name":              sale.ShopName,
+			"payment_mode":           sale.PaymentMode,
+			"notes":                  sale.Notes,
+			"subtotal":               sale.Subtotal,
+			"discount_total":         sale.DiscountTotal,
+			"final_total":            sale.FinalTotal,
+			"amount_received":        sale.AmountReceived,
+			"balance_due":            sale.BalanceDue,
+			"status":                 sale.Status,
+			"payment_breakdown_json": sale.PaymentBreakdownJSON,
+			"created_by":             sale.CreatedBy,
 		}).Error; err != nil {
 			return err
 		}
@@ -136,6 +137,18 @@ func (r *OfflineSaleRepository) Update(sale *models.OfflineSale) error {
 
 		return tx.Create(&sale.Items).Error
 	})
+}
+
+func (r *OfflineSaleRepository) UpdatePaymentBreakdown(id string, paymentMode string, amountReceived float64, balanceDue float64, status string, paymentBreakdownJSON string) error {
+	return r.db.Model(&models.OfflineSale{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"payment_mode":           paymentMode,
+			"amount_received":        amountReceived,
+			"balance_due":            balanceDue,
+			"status":                 status,
+			"payment_breakdown_json": paymentBreakdownJSON,
+		}).Error
 }
 
 func (r *OfflineSaleRepository) Delete(id string) error {

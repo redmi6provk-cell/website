@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  BarChart3,
+  ExternalLink,
+  FilePenLine,
   Landmark,
   RefreshCcw,
   Search,
-  Users,
   Wallet,
+  X,
 } from "lucide-react";
 import api from "@/lib/api";
 import { canAccessERP } from "@/lib/roles";
@@ -39,6 +38,20 @@ interface PaymentModeTransaction {
   source_module: string;
   direction: string;
 }
+
+type ManualTransactionForm = {
+  payment_id: string;
+  direction: string;
+  payment_mode: string;
+  amount: string;
+  transaction_date: string;
+  reference_id: string;
+  reference_label: string;
+  party_id: string;
+  party_name: string;
+  party_type: string;
+  remarks: string;
+};
 
 function formatCurrency(value: number) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
@@ -85,7 +98,33 @@ export default function ARPDashboard() {
   const [loading, setLoading] = useState(true);
   const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
   const [transactionSearch, setTransactionSearch] = useState("");
+  const [editingTransaction, setEditingTransaction] = useState<ManualTransactionForm | null>(null);
+  const [isSavingManualTransaction, setIsSavingManualTransaction] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const fetchSummary = useCallback(async () => {
+    const sumRes = await api.get("/admin/arp/summary");
+    setSummary(
+      sumRes.data.data || {
+        total_receivable: 0,
+        total_payable: 0,
+        cash_total: 0,
+        bank_accounts: [],
+      }
+    );
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await fetchSummary();
+    } catch (fetchError) {
+      setError(getApiErrorMessage(fetchError, "ARP summary load nahi ho pa raha hai."));
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchSummary]);
 
   useEffect(() => {
     checkAuth();
@@ -100,27 +139,7 @@ export default function ARPDashboard() {
     if (isInitialized && isAuthenticated && user && canAccessERP(user.role)) {
       fetchData();
     }
-  }, [isInitialized, isAuthenticated, user, router]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const sumRes = await api.get("/admin/arp/summary");
-      setSummary(
-        sumRes.data.data || {
-          total_receivable: 0,
-          total_payable: 0,
-          cash_total: 0,
-          bank_accounts: [],
-        }
-      );
-    } catch (fetchError) {
-      setError(getApiErrorMessage(fetchError, "ARP summary load nahi ho pa raha hai."));
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isInitialized, isAuthenticated, user, router, fetchData]);
 
   const paymentModeCards = useMemo(
     () => [
@@ -165,6 +184,20 @@ export default function ARPDashboard() {
     void fetchTransactions();
   }, [selectedMode, isInitialized, isAuthenticated, user]);
 
+  const refreshTransactions = useCallback(async () => {
+    if (!selectedMode) return;
+    setIsTransactionsLoading(true);
+    try {
+      const res = await api.get(`/admin/arp/payment-transactions?mode=${encodeURIComponent(selectedMode)}`);
+      setTransactions(res.data.data || []);
+    } catch (fetchError) {
+      setTransactions([]);
+      setError(getApiErrorMessage(fetchError, "Transactions load nahi ho rahi hain."));
+    } finally {
+      setIsTransactionsLoading(false);
+    }
+  }, [selectedMode]);
+
   const filteredTransactions = transactions.filter((transaction) => {
     const value = transactionSearch.toLowerCase();
     return (
@@ -182,6 +215,68 @@ export default function ARPDashboard() {
 
   const handleOpenPaymentMode = (mode: string) => {
     router.push(`/admin/arp?mode=${encodeURIComponent(mode)}`);
+  };
+
+  const isManualTransaction = (transaction: PaymentModeTransaction) =>
+    transaction.source_module.toLowerCase() === "manual_payment";
+
+  const openManualEdit = (transaction: PaymentModeTransaction) => {
+    setEditingTransaction({
+      payment_id: transaction.payment_id,
+      direction: transaction.direction || "in",
+      payment_mode: transaction.payment_mode || selectedMode,
+      amount: String(transaction.amount || ""),
+      transaction_date: transaction.payment_date ? new Date(transaction.payment_date).toISOString().slice(0, 10) : "",
+      reference_id: transaction.reference_id || "",
+      reference_label: transaction.reference_label || "",
+      party_id: transaction.party_id || "",
+      party_name: transaction.party_name || "",
+      party_type: transaction.party_type || "",
+      remarks: transaction.remarks || "",
+    });
+  };
+
+  const handleOpenSource = (transaction: PaymentModeTransaction) => {
+    const source = transaction.source_module.toLowerCase();
+    const referenceId = (transaction.reference_id || "").split("::")[0];
+
+    if (source === "order_cod" && referenceId) {
+      router.push(`/admin/orders?orderId=${referenceId}`);
+      return;
+    }
+    if (source === "offline_sale" && referenceId) {
+      router.push(`/admin/offline-sell?edit=${referenceId}`);
+      return;
+    }
+    if (transaction.party_id) {
+      router.push(`/admin/arp/ledger/${transaction.party_id}`);
+    }
+  };
+
+  const handleSaveManualTransaction = async () => {
+    if (!editingTransaction) return;
+    setIsSavingManualTransaction(true);
+    setError(null);
+    try {
+      await api.put(`/admin/arp/manual-transactions/${editingTransaction.payment_id}`, {
+        direction: editingTransaction.direction,
+        payment_mode: editingTransaction.payment_mode,
+        amount: Number(editingTransaction.amount || 0),
+        transaction_date: editingTransaction.transaction_date,
+        reference_id: editingTransaction.reference_id,
+        reference_label: editingTransaction.reference_label,
+        party_id: editingTransaction.party_id,
+        party_name: editingTransaction.party_name,
+        party_type: editingTransaction.party_type,
+        remarks: editingTransaction.remarks,
+      });
+      await Promise.all([refreshTransactions(), fetchSummary()]);
+      setEditingTransaction(null);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Manual transaction update nahi ho paya."));
+    } finally {
+      setIsSavingManualTransaction(false);
+    }
   };
 
   if (!isInitialized || loading) {
@@ -303,22 +398,23 @@ export default function ARPDashboard() {
             ) : (
               <>
                 <div className="hidden lg:block">
-                  <div className="grid grid-cols-[180px_minmax(240px,1fr)_180px_180px] gap-4 border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
+                  <div className="grid grid-cols-[180px_minmax(240px,1fr)_180px_180px_230px] gap-4 border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
                     <div>Type</div>
                     <div>Name</div>
                     <div>Date</div>
                     <div>Amount</div>
+                    <div>Actions</div>
                   </div>
                   <div className="max-h-[70vh] overflow-y-auto">
                     {filteredTransactions.map((transaction) => (
-                      <button
+                      <div
                         key={transaction.payment_id}
-                        type="button"
-                        onClick={() => transaction.party_id && router.push(`/admin/arp/ledger/${transaction.party_id}`)}
-                        className="grid w-full grid-cols-[180px_minmax(240px,1fr)_180px_180px] gap-4 border-b border-zinc-100 px-6 py-4 text-left transition hover:bg-sky-50/60"
+                        className="grid grid-cols-[180px_minmax(240px,1fr)_180px_180px_230px] gap-4 border-b border-zinc-100 px-6 py-4 text-left transition hover:bg-sky-50/60"
                       >
                         <div>
-                          <div className="text-sm font-semibold text-zinc-900">{formatSourceLabel(transaction.source_module)}</div>
+                          <div className="text-sm font-semibold text-zinc-900">
+                            {isManualTransaction(transaction) ? "Manual Entry" : formatSourceLabel(transaction.source_module)}
+                          </div>
                           <div className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
                             transaction.direction === "out" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
                           }`}>
@@ -337,17 +433,51 @@ export default function ARPDashboard() {
                           {transaction.direction === "out" ? "-" : "+"}
                           {formatCurrency(transaction.amount)}
                         </div>
-                      </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isManualTransaction(transaction) ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openManualEdit(transaction)}
+                              className="rounded-xl"
+                            >
+                              <FilePenLine className="mr-2 h-4 w-4" />
+                              Edit
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenSource(transaction)}
+                              className="rounded-xl"
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Open Source
+                            </Button>
+                          )}
+                          {transaction.party_id ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/admin/arp/ledger/${transaction.party_id}`)}
+                              className="rounded-xl"
+                            >
+                              Ledger
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-3 p-4 lg:hidden">
                   {filteredTransactions.map((transaction) => (
-                    <button
+                    <div
                       key={transaction.payment_id}
-                      type="button"
-                      onClick={() => transaction.party_id && router.push(`/admin/arp/ledger/${transaction.party_id}`)}
                       className="w-full rounded-[1.5rem] border border-zinc-200 bg-zinc-50/70 p-4 text-left"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -362,7 +492,7 @@ export default function ARPDashboard() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-zinc-600">
-                          {formatSourceLabel(transaction.source_module)}
+                          {isManualTransaction(transaction) ? "Manual Entry" : formatSourceLabel(transaction.source_module)}
                         </span>
                         <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
                           transaction.direction === "out" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
@@ -374,7 +504,43 @@ export default function ARPDashboard() {
                         {transaction.reference_label || transaction.reference_id || transaction.payment_id}
                       </div>
                       <div className="mt-1 text-xs text-zinc-400">{transaction.remarks || "No remarks"}</div>
-                    </button>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {isManualTransaction(transaction) ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openManualEdit(transaction)}
+                            className="rounded-xl"
+                          >
+                            <FilePenLine className="mr-2 h-4 w-4" />
+                            Edit
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenSource(transaction)}
+                            className="rounded-xl"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Open Source
+                          </Button>
+                        )}
+                        {transaction.party_id ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/admin/arp/ledger/${transaction.party_id}`)}
+                            className="rounded-xl"
+                          >
+                            Ledger
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </>
@@ -382,6 +548,137 @@ export default function ARPDashboard() {
           </section>
         </div>
       </div>
+
+      {editingTransaction ? (
+        <div className="fixed inset-0 z-[90]">
+          <div className="absolute inset-0 bg-zinc-950/35 backdrop-blur-sm" onClick={() => setEditingTransaction(null)} />
+          <div className="absolute inset-0 overflow-y-auto p-4 sm:p-6">
+            <div className="mx-auto flex min-h-full max-w-3xl items-center justify-center">
+              <div className="w-full rounded-[2rem] border border-zinc-200 bg-white shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-400">Manual Transaction</div>
+                    <h3 className="mt-2 text-2xl font-black text-zinc-900">Edit Entry</h3>
+                    <p className="mt-1 text-sm text-zinc-500">Yahin se sirf manual ARP transaction update karo.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTransaction(null)}
+                    className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-900"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="grid gap-4 p-6 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Direction</label>
+                    <select
+                      value={editingTransaction.direction}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, direction: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    >
+                      <option value="in">Credit</option>
+                      <option value="out">Debit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Mode</label>
+                    <input
+                      value={editingTransaction.payment_mode}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, payment_mode: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingTransaction.amount}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, amount: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Transaction Date</label>
+                    <input
+                      type="date"
+                      value={editingTransaction.transaction_date}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, transaction_date: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Reference ID</label>
+                    <input
+                      value={editingTransaction.reference_id}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, reference_id: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Reference Label</label>
+                    <input
+                      value={editingTransaction.reference_label}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, reference_label: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Party ID</label>
+                    <input
+                      value={editingTransaction.party_id}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, party_id: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Party Name</label>
+                    <input
+                      value={editingTransaction.party_name}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, party_name: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Party Type</label>
+                    <input
+                      value={editingTransaction.party_type}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, party_type: event.target.value } : current)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Remarks</label>
+                    <textarea
+                      rows={4}
+                      value={editingTransaction.remarks}
+                      onChange={(event) => setEditingTransaction((current) => current ? { ...current, remarks: event.target.value } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white p-4 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3 border-t border-zinc-100 px-6 py-5">
+                  <Button
+                    type="button"
+                    onClick={handleSaveManualTransaction}
+                    isLoading={isSavingManualTransaction}
+                    className="rounded-2xl px-6"
+                  >
+                    Save Changes
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setEditingTransaction(null)} className="rounded-2xl px-6">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -27,28 +27,30 @@ const (
 )
 
 type Order struct {
-	ID                      uuid.UUID          `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	UserID                  uuid.UUID          `gorm:"type:uuid;not null" json:"user_id"`
-	User                    User               `gorm:"foreignKey:UserID" json:"user"`
-	CustomerName            string             `gorm:"type:varchar(120)" json:"customer_name"`
-	CustomerPhone           string             `gorm:"type:varchar(20)" json:"customer_phone"`
-	ShopName                string             `gorm:"type:varchar(120)" json:"shop_name"`
-	InvoiceNumber           string             `gorm:"type:varchar(120);index" json:"invoice_number"`
-	Subtotal                float64            `json:"subtotal"`
-	DeliveryCharge          float64            `json:"delivery_charge"`
-	Total                   float64            `json:"total"`
-	Status                  string             `gorm:"default:'pending';type:varchar(50)" json:"status"`
-	DeliveryType            string             `gorm:"default:'delivery';type:varchar(30)" json:"delivery_type"`
-	PaymentMode             string             `gorm:"default:'cod';type:varchar(30)" json:"payment_mode"`
-	PaymentStatus           string             `gorm:"default:'pending';type:varchar(30)" json:"payment_status"`
-	ReceivedAmount          float64            `gorm:"type:decimal(15,2);default:0" json:"received_amount"`
-	PaymentCollectionMethod string             `gorm:"type:varchar(120)" json:"payment_collection_method"`
-	Address                 string             `json:"address"`
-	Notes                   string             `json:"notes"`
-	Items                   []OrderItem        `gorm:"foreignKey:OrderID" json:"items"`
-	StatusEvents            []OrderStatusEvent `gorm:"foreignKey:OrderID" json:"status_events"`
-	CreatedAt               time.Time          `json:"created_at"`
-	UpdatedAt               time.Time          `json:"updated_at"`
+	ID                      uuid.UUID               `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID                  uuid.UUID               `gorm:"type:uuid;not null" json:"user_id"`
+	User                    User                    `gorm:"foreignKey:UserID" json:"user"`
+	CustomerName            string                  `gorm:"type:varchar(120)" json:"customer_name"`
+	CustomerPhone           string                  `gorm:"type:varchar(20)" json:"customer_phone"`
+	ShopName                string                  `gorm:"type:varchar(120)" json:"shop_name"`
+	InvoiceNumber           string                  `gorm:"type:varchar(120);index" json:"invoice_number"`
+	Subtotal                float64                 `json:"subtotal"`
+	DeliveryCharge          float64                 `json:"delivery_charge"`
+	Total                   float64                 `json:"total"`
+	Status                  string                  `gorm:"default:'pending';type:varchar(50)" json:"status"`
+	DeliveryType            string                  `gorm:"default:'delivery';type:varchar(30)" json:"delivery_type"`
+	PaymentMode             string                  `gorm:"default:'cod';type:varchar(30)" json:"payment_mode"`
+	PaymentStatus           string                  `gorm:"default:'pending';type:varchar(30)" json:"payment_status"`
+	ReceivedAmount          float64                 `gorm:"type:decimal(15,2);default:0" json:"received_amount"`
+	PaymentCollectionMethod string                  `gorm:"type:varchar(120)" json:"payment_collection_method"`
+	PaymentBreakdownJSON    string                  `gorm:"type:text" json:"payment_breakdown_json"`
+	PaymentBreakdown        []PaymentBreakdownEntry `gorm:"-" json:"payment_breakdown,omitempty"`
+	Address                 string                  `json:"address"`
+	Notes                   string                  `json:"notes"`
+	Items                   []OrderItem             `gorm:"foreignKey:OrderID" json:"items"`
+	StatusEvents            []OrderStatusEvent      `gorm:"foreignKey:OrderID" json:"status_events"`
+	CreatedAt               time.Time               `json:"created_at"`
+	UpdatedAt               time.Time               `json:"updated_at"`
 }
 
 type OrderItem struct {

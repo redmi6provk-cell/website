@@ -129,6 +129,96 @@ func (r *ProductRepository) ReduceStock(id string, quantity int) error {
 	return nil
 }
 
+func (r *ProductRepository) GetTransactions(productID string) ([]models.ProductTransaction, error) {
+	transactions := make([]models.ProductTransaction, 0)
+
+	query := `
+		SELECT *
+		FROM (
+			SELECT
+				'Sale' AS type,
+				COALESCE(NULLIF(TRIM(o.invoice_number), ''), o.id::text) AS reference_no,
+				COALESCE(NULLIF(TRIM(o.customer_name), ''), NULLIF(TRIM(o.shop_name), ''), NULLIF(TRIM(u.name), ''), 'Online Customer') AS name,
+				TO_CHAR(o.created_at::date, 'DD/MM/YYYY') AS date,
+				oi.quantity AS quantity,
+				oi.price AS price_per_unit,
+				oi.price * oi.quantity AS line_total,
+				o.total AS invoice_total,
+				COALESCE(o.received_amount, 0) AS received_amount,
+				CASE
+					WHEN COALESCE(o.received_amount, 0) >= COALESCE(o.total, 0) AND COALESCE(o.total, 0) > 0 THEN 'paid'
+					WHEN COALESCE(o.received_amount, 0) > 0 THEN 'partial'
+					ELSE 'unpaid'
+				END AS payment_status,
+				COALESCE(NULLIF(TRIM(o.payment_collection_method), ''), NULLIF(TRIM(o.payment_mode), ''), 'cash') AS payment_mode,
+				'order' AS source_module,
+				o.id::text AS source_id,
+				o.created_at AS sort_date
+			FROM order_items oi
+			INNER JOIN orders o ON o.id = oi.order_id
+			LEFT JOIN users u ON u.id = o.user_id
+			WHERE oi.product_id = ?
+
+			UNION ALL
+
+			SELECT
+				'Sale' AS type,
+				COALESCE(NULLIF(TRIM(os.bill_number), ''), os.id::text) AS reference_no,
+				COALESCE(NULLIF(TRIM(os.customer_name), ''), NULLIF(TRIM(os.shop_name), ''), 'Walk-in Customer') AS name,
+				TO_CHAR(os.sale_date, 'DD/MM/YYYY') AS date,
+				osi.quantity AS quantity,
+				osi.sell_price AS price_per_unit,
+				osi.line_total AS line_total,
+				os.final_total AS invoice_total,
+				COALESCE(os.amount_received, 0) AS received_amount,
+				CASE
+					WHEN LOWER(COALESCE(os.status, '')) = 'paid' THEN 'paid'
+					WHEN LOWER(COALESCE(os.status, '')) = 'partial' THEN 'partial'
+					WHEN LOWER(COALESCE(os.status, '')) = 'due' THEN 'unpaid'
+					ELSE COALESCE(NULLIF(TRIM(os.status), ''), 'pending')
+				END AS payment_status,
+				COALESCE(NULLIF(TRIM(os.payment_mode), ''), 'cash') AS payment_mode,
+				'offline_sale' AS source_module,
+				os.id::text AS source_id,
+				os.sale_date AS sort_date
+			FROM offline_sale_items osi
+			INNER JOIN offline_sales os ON os.id = osi.offline_sale_id
+			WHERE osi.product_id = ?
+
+			UNION ALL
+
+			SELECT
+				'Purchase' AS type,
+				COALESCE(NULLIF(TRIM(p.invoice_number), ''), p.id::text) AS reference_no,
+				COALESCE(NULLIF(TRIM(p.supplier_name), ''), 'Supplier') AS name,
+				TO_CHAR(p.date, 'DD/MM/YYYY') AS date,
+				pi.quantity AS quantity,
+				pi.buy_price AS price_per_unit,
+				pi.line_total AS line_total,
+				p.total_amount AS invoice_total,
+				CASE
+					WHEN LOWER(COALESCE(TRIM(p.payment_status), '')) = 'paid' THEN p.total_amount
+					ELSE 0
+				END AS received_amount,
+				COALESCE(NULLIF(TRIM(p.payment_status), ''), 'pending') AS payment_status,
+				COALESCE(NULLIF(TRIM(p.payment_method), ''), 'cash') AS payment_mode,
+				'purchase' AS source_module,
+				p.id::text AS source_id,
+				p.date AS sort_date
+			FROM purchase_items pi
+			INNER JOIN purchases p ON p.id = pi.purchase_id
+			WHERE pi.product_id = ?
+		) AS product_transactions
+		ORDER BY sort_date DESC, reference_no DESC
+	`
+
+	if err := r.db.Raw(query, productID, productID, productID).Scan(&transactions).Error; err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}
+
 func (r *ProductRepository) BulkUpsert(products []models.Product) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},

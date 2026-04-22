@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"backend/internal/models"
 	"backend/internal/services"
 	"backend/pkg/response"
 
@@ -158,4 +159,103 @@ func (h *OrderHandler) UpdateOrderInvoiceNumber(c *gin.Context) {
 	}
 
 	response.OK(c, "Order invoice number updated", nil)
+}
+
+func (h *OrderHandler) UpdateOrderPayment(c *gin.Context) {
+	id := c.Param("id")
+	orderUUID, err := uuid.Parse(id)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
+
+	var req struct {
+		ReceivedAmount          float64 `json:"received_amount"`
+		PaymentCollectionMethod string  `json:"payment_collection_method"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, "Payment payload is invalid")
+		return
+	}
+
+	if err := h.orderService.UpdatePaymentDetails(orderUUID, req.ReceivedAmount, req.PaymentCollectionMethod); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Order payment updated", nil)
+}
+
+func (h *OrderHandler) UpdateOrderPaymentBreakdown(c *gin.Context) {
+	id := c.Param("id")
+	orderUUID, err := uuid.Parse(id)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
+
+	var req struct {
+		PaymentBreakdown []models.PaymentBreakdownEntry `json:"payment_breakdown"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, "Payment breakdown payload is invalid")
+		return
+	}
+
+	if err := h.orderService.UpdatePaymentBreakdown(orderUUID, req.PaymentBreakdown); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Order payment breakdown updated", nil)
+}
+
+func (h *OrderHandler) UpdateOrderItems(c *gin.Context) {
+	id := c.Param("id")
+	orderUUID, err := uuid.Parse(id)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
+
+	var req struct {
+		Items []struct {
+			ID       string `json:"id"`
+			Quantity int    `json:"quantity"`
+		} `json:"items"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, "Order items payload is invalid")
+		return
+	}
+
+	input := services.UpdateOrderItemsInput{
+		Items: make([]services.UpdateOrderItemInput, 0, len(req.Items)),
+	}
+	for _, item := range req.Items {
+		itemID, parseErr := uuid.Parse(item.ID)
+		if parseErr != nil {
+			response.Fail(c, http.StatusBadRequest, "Invalid order item ID")
+			return
+		}
+		input.Items = append(input.Items, services.UpdateOrderItemInput{
+			ID:       itemID,
+			Quantity: item.Quantity,
+		})
+	}
+
+	changedBy, ok := getUserID(c)
+	if !ok {
+		response.Fail(c, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	input.ChangedBy = &changedBy
+
+	order, err := h.orderService.UpdateItems(orderUUID, input)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Order items updated", order)
 }

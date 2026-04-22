@@ -198,9 +198,10 @@ export default function OfflineSellHistoryPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => setSelectedSaleId(entry.id)} className="rounded-xl"><Eye className="mr-2 h-4 w-4" />View</Button>
+                  {entry.source === "offline_sale" ? <Button variant="outline" size="sm" onClick={() => router.push(`/admin/offline-sell?edit=${entry.id}`)} className="rounded-xl">Open in Billing Form</Button> : null}
                   {entry.source === "offline_sale" && entry.sale ? <Button variant="outline" size="sm" onClick={() => printSale(entry.sale!)} className="rounded-xl"><Printer className="mr-2 h-4 w-4" />Print</Button> : null}
                   {entry.source === "offline_sale" ? <Button variant="ghost" size="sm" onClick={() => void deleteSale(entry.id)} className="rounded-xl text-red-500 hover:bg-red-50"><Trash2 className="mr-2 h-4 w-4" />Delete</Button> : null}
-                  {entry.source === "confirmed_order" ? <Button variant="ghost" size="sm" onClick={() => router.push("/admin/orders")} className="rounded-xl">Open Orders</Button> : null}
+                  {entry.source === "confirmed_order" ? <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/orders?orderId=${entry.id}`)} className="rounded-xl">Open Orders</Button> : null}
                 </div>
               </div>
             ))}

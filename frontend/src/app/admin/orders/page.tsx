@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { canAccessAdmin } from "@/lib/roles";
 import { useAuthStore } from "@/store/authStore";
 import { Order } from "@/types";
@@ -14,7 +14,9 @@ import {
   Download,
   FileText,
   Filter,
+  Minus,
   Phone,
+  Plus,
   Search,
   ShoppingBag,
   Store,
@@ -24,6 +26,7 @@ import {
 
 const ORDER_STATUSES = ["pending", "confirmed", "packed", "out_for_delivery", "delivered", "cancelled"] as const;
 type BankAccount = { name: string; balance: number };
+type EditableOrderItem = Order["items"][number];
 
 function getShortReference(orderId: string) {
   return `ORD-${orderId.slice(0, 8).toUpperCase()}`;
@@ -138,6 +141,14 @@ function getItemCount(order: Order) {
   return order.items.reduce((sum, item) => sum + item.quantity, 0);
 }
 
+function getItemCountFromItems(items: EditableOrderItem[]) {
+  return items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function getSubtotalFromItems(items: EditableOrderItem[]) {
+  return items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+}
+
 function getAddressPreview(order: Order) {
   if (getDeliveryType(order) === "pickup") {
     return "Store Pickup";
@@ -180,8 +191,15 @@ function buildWhatsappLink(phone: string, order: Order) {
   return `https://wa.me/91${digits}?text=${message}`;
 }
 
+function getStockHint(item: EditableOrderItem) {
+  const availableExtra = Math.max(0, Number(item.product?.stock || 0));
+  return `Available extra stock: ${availableExtra}`;
+}
+
 export default function AdminOrdersPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -197,8 +215,10 @@ export default function AdminOrdersPage() {
   const [receivedAmount, setReceivedAmount] = useState("");
   const [codCollectionMethod, setCodCollectionMethod] = useState("cash");
   const [codCollectionOptions, setCodCollectionOptions] = useState<string[]>(["cash"]);
+  const [editableItems, setEditableItems] = useState<EditableOrderItem[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSavingInvoiceNumber, setIsSavingInvoiceNumber] = useState(false);
+  const [isSavingItems, setIsSavingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -248,6 +268,7 @@ export default function AdminOrdersPage() {
     if (!selectedOrder) return;
     setConfirmNote("");
     setInvoiceNumber(getInvoiceReference(selectedOrder));
+    setEditableItems(selectedOrder.items.map((item) => ({ ...item })));
     setReceivedAmount(
       getPaymentMode(selectedOrder) === "cod"
         ? String(selectedOrder.received_amount ?? selectedOrder.total)
@@ -259,6 +280,36 @@ export default function AdminOrdersPage() {
     if (!selectedOrder) return;
     setCodCollectionMethod(codCollectionOptions[0] || "cash");
   }, [selectedOrder, codCollectionOptions]);
+
+  useEffect(() => {
+    const orderIdFromQuery = searchParams.get("orderId");
+    if (!orderIdFromQuery || orders.length === 0) return;
+    const matchedOrder = orders.find((order) => order.id === orderIdFromQuery);
+    if (matchedOrder) {
+      setSelectedOrderId(matchedOrder.id);
+    }
+  }, [orders, searchParams]);
+
+  const editedSubtotal = useMemo(() => getSubtotalFromItems(editableItems), [editableItems]);
+  const editedDeliveryCharge = selectedOrder ? getDeliveryCharge(selectedOrder) : 0;
+  const editedTotal = editedSubtotal + editedDeliveryCharge;
+  const hasItemChanges = useMemo(() => {
+    if (!selectedOrder || editableItems.length !== selectedOrder.items.length) return false;
+    return editableItems.some((item) => {
+      const original = selectedOrder.items.find((entry) => entry.id === item.id);
+      return !original || original.quantity !== item.quantity;
+    });
+  }, [editableItems, selectedOrder]);
+
+  const closeOrderModal = () => {
+    setSelectedOrderId(null);
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.has("orderId")) {
+      params.delete("orderId");
+      const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      router.replace(nextUrl);
+    }
+  };
 
   const filteredOrders = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -411,6 +462,48 @@ export default function AdminOrdersPage() {
       alert(getApiErrorMessage(saveError, "Invoice number save failed"));
     } finally {
       setIsSavingInvoiceNumber(false);
+    }
+  };
+
+  const updateEditableItemQuantity = (itemId: string, nextQuantity: number) => {
+    setEditableItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              quantity: Math.max(1, Number.isFinite(nextQuantity) ? Math.floor(nextQuantity) : 1),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleSaveItems = async () => {
+    if (!selectedOrder || !hasItemChanges) return;
+    setIsSavingItems(true);
+    try {
+      const response = await api.put(`/admin/orders/${selectedOrder.id}/items`, {
+        items: editableItems.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+        })),
+      });
+
+      const updatedOrder: Order = response.data.data;
+      setOrders((current) =>
+        current.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
+      );
+      setEditableItems(updatedOrder.items.map((item) => ({ ...item })));
+      setReceivedAmount(
+        getPaymentMode(updatedOrder) === "cod"
+          ? String(updatedOrder.received_amount ?? updatedOrder.total)
+          : ""
+      );
+      setSuccessMessage("Order items updated successfully.");
+    } catch (saveError: unknown) {
+      alert(getApiErrorMessage(saveError, "Order items save failed"));
+    } finally {
+      setIsSavingItems(false);
     }
   };
 
@@ -813,164 +906,244 @@ export default function AdminOrdersPage() {
 
       {selectedOrder && (
         <div className="fixed inset-0 z-[90]">
-          <div className="absolute inset-0 bg-zinc-950/35 backdrop-blur-sm" onClick={() => setSelectedOrderId(null)} />
-          <aside className="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto bg-white shadow-2xl">
-            <div className="sticky top-0 border-b border-zinc-100 bg-white px-6 py-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Order Confirmation Form</div>
-                  <h2 className="mt-2 text-2xl font-black text-zinc-900">{getInvoiceReference(selectedOrder)}</h2>
-                  <p className="mt-1 text-sm text-zinc-500">{formatDateTime(selectedOrder.created_at)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrderId(null)}
-                  className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-6 p-6">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Final Total</div>
-                  <div className="mt-3 text-2xl font-black text-zinc-900">{formatCurrency(selectedOrder.total)}</div>
-                </div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Status</div>
-                  <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(selectedOrder.status)}`}>
-                    {formatStatusLabel(selectedOrder.status)}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment</div>
-                  <div className="mt-3 text-lg font-bold text-zinc-900">{formatStatusLabel(getPaymentMode(selectedOrder))}</div>
-                </div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Delivery</div>
-                  <div className="mt-3 text-lg font-bold text-zinc-900">
-                    {getDeliveryType(selectedOrder) === "pickup" ? "Store Pickup" : "Home Delivery"}
-                  </div>
-                </div>
-              </div>
-
-              <section className="rounded-[1.75rem] border border-zinc-100 bg-white p-5">
-                <div className="mb-5 flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">Order Billing Form</h2>
-                    <p className="mt-1 text-sm text-zinc-500">Customer info, items, totals aur order confirmation yahan se manage karo.</p>
-                  </div>
-                  <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setSelectedOrderId(null)}>
-                    Close
-                  </Button>
-                </div>
-
-                <div className="space-y-5">
-                  <div className="grid gap-4 md:grid-cols-2">
+          <div className="absolute inset-0 bg-zinc-950/35 backdrop-blur-sm" onClick={closeOrderModal} />
+          <div className="absolute inset-0 overflow-y-auto p-4 sm:p-6">
+            <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center">
+              <div className="w-full overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_30px_120px_rgba(24,24,27,0.24)]">
+                <div className="border-b border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_38%),linear-gradient(135deg,#f7fee7_0%,#ffffff_55%,#ecfeff_100%)] px-6 py-6 sm:px-8">
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Name</label>
-                      <input value={getCustomerName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                      <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-700">Order Confirmation Form</div>
+                      <h2 className="mt-2 text-2xl font-black text-zinc-900 sm:text-3xl">{getInvoiceReference(selectedOrder)}</h2>
+                      <p className="mt-2 max-w-2xl text-sm text-zinc-600">
+                        Order Billing Form ko editable popup me update kiya gaya hai. Yahin se item quantity, totals aur confirmation manage karo.
+                      </p>
                     </div>
-                    <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Phone</label>
-                      <input value={getCustomerPhone(selectedOrder) || ""} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={closeOrderModal}
+                      className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-900"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Invoice Number</label>
-                      <input
-                        value={invoiceNumber}
-                        onChange={(e) => setInvoiceNumber(e.target.value)}
-                        className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
-                      />
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-4 backdrop-blur">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Editable Total</div>
+                      <div className="mt-3 text-2xl font-black text-zinc-900">{formatCurrency(editedTotal)}</div>
                     </div>
-                    <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label>
-                      <input value={getShopName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                    <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-4 backdrop-blur">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Items Count</div>
+                      <div className="mt-3 text-2xl font-black text-zinc-900">{getItemCountFromItems(editableItems)}</div>
                     </div>
-                    <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Delivery Type</label>
-                      <input value={getDeliveryType(selectedOrder) === "pickup" ? "Store Pickup" : "Home Delivery"} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Status</label>
-                      <input value={formatStatusLabel(getPaymentStatus(selectedOrder))} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
-                      {getDeliveryType(selectedOrder) === "pickup" ? "Pickup Label" : "Address"}
-                    </label>
-                    <textarea value={selectedOrder.address} readOnly rows={3} className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-900 outline-none" />
-                  </div>
-
-                  <div className="rounded-[1.8rem] border border-zinc-100 bg-zinc-50/70 p-4 sm:p-5">
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-700">Items Section</h3>
-                        <p className="mt-1 text-sm text-zinc-500">Order items, quantity, unit price aur line total.</p>
+                    <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-4 backdrop-blur">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Status</div>
+                      <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(selectedOrder.status)}`}>
+                        {formatStatusLabel(selectedOrder.status)}
                       </div>
                     </div>
-
-                    <div className="space-y-4">
-                      {selectedOrder.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="grid grid-cols-1 gap-4 rounded-2xl border border-zinc-100 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.95fr)] xl:items-end"
-                        >
-                          <div className="flex h-full flex-col">
-                            <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Product</label>
-                            <div className="flex h-11 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium text-zinc-900">
-                              {item.product?.name || "Product"}
-                            </div>
-                          </div>
-                          <div className="flex h-full flex-col">
-                            <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Qty</label>
-                            <div className="flex h-11 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium text-zinc-900">
-                              {item.quantity}
-                            </div>
-                          </div>
-                          <div className="flex h-full flex-col">
-                            <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Unit Price</label>
-                            <div className="flex h-11 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium text-zinc-900">
-                              {formatCurrency(item.price)}
-                            </div>
-                          </div>
-                          <div className="flex h-full flex-col">
-                            <label className="mb-2 block min-h-[2rem] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Line Total</label>
-                            <div className="flex h-11 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-zinc-900">
-                              {formatCurrency(item.price * item.quantity)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-4 backdrop-blur">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Delivery</div>
+                      <div className="mt-3 text-lg font-bold text-zinc-900">
+                        {getDeliveryType(selectedOrder) === "pickup" ? "Store Pickup" : "Home Delivery"}
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                      <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Summary</div>
-                      <div className="mt-4 space-y-2 text-sm text-zinc-600">
+                <div className="grid gap-6 p-6 sm:p-8 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.95fr)]">
+                  <div className="space-y-6">
+                    <section className="rounded-[1.8rem] border border-zinc-100 bg-white p-5">
+                      <div className="mb-5 flex items-center justify-between gap-4">
+                        <div>
+                          <h3 className="text-xl font-bold text-zinc-900">Order Billing Form</h3>
+                          <p className="mt-1 text-sm text-zinc-500">Customer info aur billing references yahan locked view me hain.</p>
+                        </div>
+                        <Button type="button" variant="outline" className="rounded-2xl" onClick={closeOrderModal}>
+                          Close
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Name</label>
+                          <input value={getCustomerName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Customer Phone</label>
+                          <input value={getCustomerPhone(selectedOrder) || ""} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Invoice Number</label>
+                          <input
+                            value={invoiceNumber}
+                            onChange={(e) => setInvoiceNumber(e.target.value)}
+                            className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Shop Name</label>
+                          <input value={getShopName(selectedOrder)} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Status</label>
+                          <input value={formatStatusLabel(getPaymentStatus(selectedOrder))} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Payment Mode</label>
+                          <input value={formatStatusLabel(getPaymentMode(selectedOrder))} readOnly className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none" />
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
+                          {getDeliveryType(selectedOrder) === "pickup" ? "Pickup Label" : "Address"}
+                        </label>
+                        <textarea value={selectedOrder.address} readOnly rows={3} className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-900 outline-none" />
+                      </div>
+                    </section>
+
+                    <section className="rounded-[1.8rem] border border-emerald-100 bg-[linear-gradient(180deg,#f0fdf4_0%,#ffffff_100%)] p-5">
+                      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-emerald-700">Items Section</h3>
+                          <p className="mt-1 text-sm text-zinc-600">Ab yahan quantity editable hai. Offline sale ki wajah se stock change ho gaya ho to direct adjust karke save kar sakte ho.</p>
+                        </div>
+                        <div className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
+                          {hasItemChanges ? "Unsaved changes" : "Synced"}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {editableItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="grid grid-cols-1 gap-4 rounded-[1.6rem] border border-white bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1.5fr)_minmax(160px,0.7fr)_minmax(0,0.9fr)_minmax(0,0.95fr)] lg:items-end"
+                          >
+                            <div className="flex flex-col">
+                              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Product</label>
+                              <div className="flex min-h-[56px] items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-semibold text-zinc-900">
+                                {item.product?.name || "Product"}
+                              </div>
+                            </div>
+                            <div className="flex flex-col">
+                              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Qty</label>
+                              <div className="flex h-14 items-center rounded-2xl border border-zinc-200 bg-white px-2">
+                                <button
+                                  type="button"
+                                  onClick={() => updateEditableItemQuantity(item.id, item.quantity - 1)}
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition hover:bg-zinc-100"
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => updateEditableItemQuantity(item.id, Number(e.target.value))}
+                                  className="h-10 flex-1 border-0 bg-transparent text-center text-base font-bold text-zinc-900 outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updateEditableItemQuantity(item.id, item.quantity + 1)}
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition hover:bg-zinc-100"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <div className="mt-2 text-xs font-medium text-zinc-500">{getStockHint(item)}</div>
+                            </div>
+                            <div className="flex flex-col">
+                              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Unit Price</label>
+                              <div className="flex h-14 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-medium text-zinc-900">
+                                {formatCurrency(item.price)}
+                              </div>
+                            </div>
+                            <div className="flex flex-col">
+                              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Line Total</label>
+                              <div className="flex h-14 items-center rounded-2xl border border-zinc-200 bg-zinc-900 px-4 text-sm font-semibold text-white">
+                                {formatCurrency(item.price * item.quantity)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="rounded-[1.8rem] border border-zinc-100 p-5">
+                      <h3 className="text-lg font-bold text-zinc-900">Timeline of Status Updates</h3>
+                      <div className="mt-5 space-y-4">
+                        {(selectedOrder.status_events && selectedOrder.status_events.length > 0 ? selectedOrder.status_events : [{ id: selectedOrder.id, order_id: selectedOrder.id, status: selectedOrder.status, created_at: selectedOrder.created_at }]).map((event, index, list) => (
+                          <div key={`${event.id}-${index}`} className="flex gap-4">
+                            <div className="mt-1 flex flex-col items-center">
+                              <div className={`h-3 w-3 rounded-full ${index === list.length - 1 ? "bg-green-600" : "bg-zinc-300"}`} />
+                              {index !== list.length - 1 && <div className="mt-2 h-full w-px bg-zinc-200" />}
+                            </div>
+                            <div className="flex-1 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(event.status)}`}>{formatStatusLabel(event.status)}</div>
+                                <div className="text-xs font-medium text-zinc-500">{formatDateTime(event.created_at)}</div>
+                              </div>
+                              {event.note && <p className="mt-3 text-sm leading-6 text-zinc-700">{event.note}</p>}
+                              {event.changed_by_user?.name && <p className="mt-2 text-xs font-medium text-zinc-500">Updated by {event.changed_by_user.name}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="space-y-6">
+                    <section className="rounded-[1.8rem] border border-zinc-100 bg-zinc-50 p-5">
+                      <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Order Summary</div>
+                      <div className="mt-4 space-y-3 text-sm text-zinc-600">
                         <div className="flex items-center justify-between">
                           <span>Subtotal</span>
-                          <span className="font-semibold text-zinc-900">{formatCurrency(getSubtotal(selectedOrder))}</span>
+                          <span className="font-semibold text-zinc-900">{formatCurrency(editedSubtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span>Delivery Charge</span>
-                          <span className="font-semibold text-zinc-900">{formatCurrency(getDeliveryCharge(selectedOrder))}</span>
+                          <span className="font-semibold text-zinc-900">{formatCurrency(editedDeliveryCharge)}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span>Final Total</span>
-                          <span className="font-bold text-green-700">{formatCurrency(selectedOrder.total)}</span>
+                          <span>Total Items</span>
+                          <span className="font-semibold text-zinc-900">{getItemCountFromItems(editableItems)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
+                          <span className="font-semibold text-zinc-900">Final Total</span>
+                          <span className="text-lg font-black text-emerald-700">{formatCurrency(editedTotal)}</span>
                         </div>
                       </div>
-                    </div>
-                    <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <Button
+                          type="button"
+                          onClick={handleSaveItems}
+                          isLoading={isSavingItems}
+                          className="h-12 rounded-2xl px-6"
+                          disabled={!hasItemChanges}
+                        >
+                          Save Items
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSaveInvoiceNumber}
+                          isLoading={isSavingInvoiceNumber}
+                          className="h-12 rounded-2xl px-6"
+                        >
+                          Save Invoice
+                        </Button>
+                      </div>
+                      {hasItemChanges && (
+                        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+                          Warning: quantity change karne se stock aur order total dono update honge.
+                        </p>
+                      )}
+                    </section>
+
+                    <section className="rounded-[1.8rem] border border-zinc-100 bg-zinc-50 p-5">
                       <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Confirmation Note</label>
                       <textarea
                         rows={4}
@@ -1007,81 +1180,58 @@ export default function AdminOrdersPage() {
                               className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-green-500"
                             />
                             <div className="mt-2 text-xs text-zinc-500">
-                              Outstanding after confirm: {formatCurrency(Math.max(0, selectedOrder.total - Number(receivedAmount || 0)))}
+                              Outstanding after confirm: {formatCurrency(Math.max(0, editedTotal - Number(receivedAmount || 0)))}
                             </div>
                           </div>
                         </div>
                       )}
+
                       <div className="mt-4 flex flex-wrap gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleSaveInvoiceNumber}
-                          isLoading={isSavingInvoiceNumber}
-                          className="h-12 rounded-2xl px-6"
-                        >
-                          Save Invoice Number
-                        </Button>
                         <Button
                           onClick={handleConfirmOrder}
                           isLoading={isUpdatingStatus}
                           className="h-12 rounded-2xl px-6"
-                          disabled={selectedOrder.status === "confirmed"}
+                          disabled={selectedOrder.status === "confirmed" || hasItemChanges}
                         >
                           {selectedOrder.status === "confirmed" ? "Order Confirmed" : "Order Confirm"}
                         </Button>
                         <button
                           type="button"
                           onClick={handlePrint}
-                          className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-200 px-5 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                          className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
                         >
                           <FileText className="mr-2 h-4 w-4" />Print Invoice
                         </button>
                       </div>
-                    </div>
-                  </div>
+                      {hasItemChanges && (
+                        <p className="mt-3 text-xs font-medium text-amber-700">
+                          Quantity update save karne ke baad hi order confirm karein, taki totals aur stock sahi rahein.
+                        </p>
+                      )}
+                    </section>
 
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {getCustomerPhone(selectedOrder) && (
-                      <>
-                        <a href={`tel:${getCustomerPhone(selectedOrder)}`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50">
-                          <Phone className="mr-2 h-4 w-4" />Call
-                        </a>
-                        <a href={buildWhatsappLink(getCustomerPhone(selectedOrder), selectedOrder)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50">
-                          WhatsApp
-                        </a>
-                      </>
-                    )}
+                    <section className="rounded-[1.8rem] border border-zinc-100 bg-white p-5">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {getCustomerPhone(selectedOrder) && (
+                          <>
+                            <a href={`tel:${getCustomerPhone(selectedOrder)}`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50">
+                              <Phone className="mr-2 h-4 w-4" />Call
+                            </a>
+                            <a href={buildWhatsappLink(getCustomerPhone(selectedOrder), selectedOrder)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50">
+                              WhatsApp
+                            </a>
+                          </>
+                        )}
                         <div className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-semibold text-zinc-700">
                           {formatStatusLabel(getPaymentMode(selectedOrder))}
                         </div>
+                      </div>
+                    </section>
                   </div>
                 </div>
-              </section>
-
-              <section className="rounded-[2rem] border border-zinc-100 p-5">
-                <h3 className="text-lg font-bold text-zinc-900">Timeline of Status Updates</h3>
-                <div className="mt-5 space-y-4">
-                  {(selectedOrder.status_events && selectedOrder.status_events.length > 0 ? selectedOrder.status_events : [{ id: selectedOrder.id, order_id: selectedOrder.id, status: selectedOrder.status, created_at: selectedOrder.created_at }]).map((event, index, list) => (
-                    <div key={`${event.id}-${index}`} className="flex gap-4">
-                      <div className="mt-1 flex flex-col items-center">
-                        <div className={`h-3 w-3 rounded-full ${index === list.length - 1 ? "bg-green-600" : "bg-zinc-300"}`} />
-                        {index !== list.length - 1 && <div className="mt-2 h-full w-px bg-zinc-200" />}
-                      </div>
-                      <div className="flex-1 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(event.status)}`}>{formatStatusLabel(event.status)}</div>
-                          <div className="text-xs font-medium text-zinc-500">{formatDateTime(event.created_at)}</div>
-                        </div>
-                        {event.note && <p className="mt-3 text-sm leading-6 text-zinc-700">{event.note}</p>}
-                        {event.changed_by_user?.name && <p className="mt-2 text-xs font-medium text-zinc-500">Updated by {event.changed_by_user.name}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+              </div>
             </div>
-          </aside>
+          </div>
         </div>
       )}
       <SuccessPopup

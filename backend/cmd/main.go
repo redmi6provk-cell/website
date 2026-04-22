@@ -33,6 +33,9 @@ func main() {
 	if err := config.EnsureOrderPaymentTrackingSchema(); err != nil {
 		log.Fatalf("Failed to align order payment tracking schema: %v", err)
 	}
+	if err := config.EnsureOfflineSalePaymentTrackingSchema(); err != nil {
+		log.Fatalf("Failed to align offline sale payment tracking schema: %v", err)
+	}
 	if err := config.EnsureSalesInvoiceSequenceSchema(); err != nil {
 		log.Fatalf("Failed to align sales invoice sequence schema: %v", err)
 	}

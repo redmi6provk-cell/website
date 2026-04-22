@@ -72,6 +72,27 @@ func (h *ProductHandler) GetProductByID(c *gin.Context) {
 	response.OK(c, "Product details", product)
 }
 
+func (h *ProductHandler) GetProductTransactions(c *gin.Context) {
+	id := c.Param("id")
+
+	product, err := h.productService.GetByIDForAdmin(id)
+	if err != nil {
+		response.Fail(c, http.StatusNotFound, "Product not found")
+		return
+	}
+
+	transactions, err := h.productService.GetTransactions(id)
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "Failed to fetch product transactions")
+		return
+	}
+
+	response.OK(c, "Product transactions fetched successfully", gin.H{
+		"product":      product,
+		"transactions": transactions,
+	})
+}
+
 // Admin Endpoints Below
 
 func (h *ProductHandler) CreateProduct(c *gin.Context) {

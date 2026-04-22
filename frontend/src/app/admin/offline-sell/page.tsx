@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessAdmin } from "@/lib/roles";
@@ -18,6 +18,7 @@ type BankAccount = { name: string; balance: number };
 type SaleItem = { id: string; product_id: string; product_name: string; quantity: number; sell_price: number; discount_value: number; line_total: number };
 type Sale = {
   id: string; bill_number: string; sale_date: string; customer_name: string; customer_phone: string; shop_name: string;
+  customer_party_id?: string;
   payment_mode: PaymentMode; notes: string; subtotal: number; discount_total: number; final_total: number;
   amount_received: number; balance_due: number; status: SaleStatus; items: SaleItem[];
 };
@@ -64,6 +65,7 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 };
 const normalizeSale = (e: RawSale): Sale => ({
   id: String(e.id), bill_number: e.bill_number || "", sale_date: String(e.sale_date || "").slice(0, 10), customer_name: e.customer_name || "Walk-in Customer",
+  customer_party_id: e.customer_party_id ? String(e.customer_party_id) : undefined,
   customer_phone: e.customer_phone || "", shop_name: e.shop_name || "", payment_mode: (e.payment_mode || "cash") as PaymentMode, notes: e.notes || "",
   subtotal: Number(e.subtotal || 0), discount_total: Number(e.discount_total || 0), final_total: Number(e.final_total || 0), amount_received: Number(e.amount_received || 0),
   balance_due: Number(e.balance_due || 0), status: (e.status || "paid") as SaleStatus,
@@ -110,6 +112,7 @@ const normalizeSaleToHistory = (sale: Sale): HistoryEntry => ({
 
 export default function AdminOfflineSellPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isInitialized, checkAuth } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -195,11 +198,58 @@ export default function AdminOfflineSellPage() {
     { label: "Items Sold", value: historyEntries.reduce((s, sale) => s + sale.item_count, 0), tone: "text-blue-700" },
   ];
 
+  const applySaleToForm = (sale: Sale) => {
+    setEditingId(sale.id);
+    setError(null);
+    setSelectedCustomerId(sale.customer_party_id || "");
+    setForm({
+      bill_number: sale.bill_number,
+      sale_date: sale.sale_date,
+      customer_name: sale.customer_name,
+      customer_phone: sale.customer_phone,
+      shop_name: sale.shop_name,
+      payment_mode: sale.payment_mode,
+      notes: sale.notes || "",
+      amount_received: String(sale.amount_received || 0),
+      items:
+        sale.items.length > 0
+          ? sale.items.map((item) => ({
+              id: item.id || newLine().id,
+              product_id: item.product_id,
+              quantity: String(item.quantity),
+              sell_price: String(item.sell_price),
+              discount_value: String(item.discount_value || 0),
+            }))
+          : [newLine()],
+    });
+  };
+
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId || sales.length === 0) {
+      return;
+    }
+
+    if (editingId === editId) {
+      return;
+    }
+
+    const sale = sales.find((entry) => entry.id === editId);
+    if (!sale) {
+      return;
+    }
+
+    applySaleToForm(sale);
+  }, [searchParams, sales, editingId]);
+
   const resetForm = () => {
     setEditingId(null);
     setError(null);
     setSelectedCustomerId("");
     setForm(emptyForm());
+    if (searchParams.get("edit")) {
+      router.replace("/admin/offline-sell");
+    }
     void loadNextInvoiceNumber();
   };
   const getPartyContact = (party: Party, type: string) => party.contacts?.find((contact) => contact.contact_type === type)?.contact_value || "";

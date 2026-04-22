@@ -4,6 +4,7 @@ import (
 	"backend/internal/models"
 	"backend/internal/repository"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -40,8 +41,10 @@ func (s *OfflineSaleService) Create(sale *models.OfflineSale) error {
 		return err
 	}
 	if s.settingsRepo != nil {
-		if err := s.settingsRepo.AdjustPaymentBalance(sale.AmountReceived, sale.PaymentMode); err != nil {
-			return err
+		for _, entry := range sale.PaymentBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(entry.Amount, entry.Mode); err != nil {
+				return err
+			}
 		}
 	}
 	return s.syncFinanceTransaction(sale)
@@ -59,11 +62,19 @@ func (s *OfflineSaleService) Update(sale *models.OfflineSale) error {
 		return err
 	}
 	if s.settingsRepo != nil {
-		if err := s.settingsRepo.AdjustPaymentBalance(-existing.AmountReceived, existing.PaymentMode); err != nil {
-			return err
+		existingBreakdown := normalizePaymentBreakdown(parsePaymentBreakdown(existing.PaymentBreakdownJSON))
+		if len(existingBreakdown) == 0 && existing.AmountReceived > 0 {
+			existingBreakdown = []models.PaymentBreakdownEntry{{Mode: existing.PaymentMode, Amount: existing.AmountReceived}}
 		}
-		if err := s.settingsRepo.AdjustPaymentBalance(sale.AmountReceived, sale.PaymentMode); err != nil {
-			return err
+		for _, entry := range existingBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(-entry.Amount, entry.Mode); err != nil {
+				return err
+			}
+		}
+		for _, entry := range sale.PaymentBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(entry.Amount, entry.Mode); err != nil {
+				return err
+			}
 		}
 	}
 	return s.syncFinanceTransaction(sale)
@@ -78,14 +89,20 @@ func (s *OfflineSaleService) Delete(id string) error {
 		return err
 	}
 	if s.settingsRepo != nil {
-		if err := s.settingsRepo.AdjustPaymentBalance(-existing.AmountReceived, existing.PaymentMode); err != nil {
-			return err
+		existingBreakdown := normalizePaymentBreakdown(parsePaymentBreakdown(existing.PaymentBreakdownJSON))
+		if len(existingBreakdown) == 0 && existing.AmountReceived > 0 {
+			existingBreakdown = []models.PaymentBreakdownEntry{{Mode: existing.PaymentMode, Amount: existing.AmountReceived}}
+		}
+		for _, entry := range existingBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(-entry.Amount, entry.Mode); err != nil {
+				return err
+			}
 		}
 	}
 	if s.financeRepo == nil {
 		return nil
 	}
-	return s.financeRepo.DeleteBySource("offline_sale", existing.ID.String())
+	return s.financeRepo.DeleteBySourcePrefix("offline_sale", existing.ID.String())
 }
 
 func (s *OfflineSaleService) IsStockConflict(err error) bool {
@@ -125,9 +142,6 @@ func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill boo
 	}
 	if sale.SaleDate.IsZero() {
 		return errors.New("sale date is required")
-	}
-	if sale.PaymentMode == "" {
-		return errors.New("payment mode is required")
 	}
 	if sale.BillNumber == "" {
 		return errors.New("invoice number is required")
@@ -179,6 +193,20 @@ func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill boo
 	if sale.AmountReceived < 0 {
 		return errors.New("amount received cannot be negative")
 	}
+	sale.PaymentBreakdown = normalizePaymentBreakdown(sale.PaymentBreakdown)
+	if len(sale.PaymentBreakdown) == 0 && sale.AmountReceived > 0 {
+		mode := strings.TrimSpace(sale.PaymentMode)
+		if mode == "" {
+			mode = "cash"
+		}
+		sale.PaymentBreakdown = []models.PaymentBreakdownEntry{{Mode: mode, Amount: sale.AmountReceived}}
+	}
+	sale.AmountReceived = totalPaymentBreakdown(sale.PaymentBreakdown)
+	sale.PaymentMode = primaryPaymentMode(sale.PaymentBreakdown, strings.TrimSpace(sale.PaymentMode))
+	if sale.PaymentMode == "" {
+		sale.PaymentMode = "cash"
+	}
+	sale.PaymentBreakdownJSON = serializePaymentBreakdown(sale.PaymentBreakdown)
 	sale.BalanceDue = sale.FinalTotal - sale.AmountReceived
 	if sale.BalanceDue < 0 {
 		sale.BalanceDue = 0
@@ -197,7 +225,7 @@ func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill boo
 func (s *OfflineSaleService) syncFinanceTransaction(sale *models.OfflineSale) error {
 	if s.financeRepo == nil || sale.AmountReceived <= 0 {
 		if s.financeRepo != nil && sale.AmountReceived <= 0 {
-			return s.financeRepo.DeleteBySource("offline_sale", sale.ID.String())
+			return s.financeRepo.DeleteBySourcePrefix("offline_sale", sale.ID.String())
 		}
 		return nil
 	}
@@ -219,18 +247,81 @@ func (s *OfflineSaleService) syncFinanceTransaction(sale *models.OfflineSale) er
 		}
 	}
 
-	return s.financeRepo.Replace(&models.FinanceTransaction{
-		SourceModule:    "offline_sale",
-		SourceID:        sale.ID.String(),
-		TransactionDate: sale.SaleDate,
-		Direction:       "in",
-		PaymentMode:     sale.PaymentMode,
-		Amount:          sale.AmountReceived,
-		ReferenceID:     sale.ID.String(),
-		ReferenceLabel:  sale.BillNumber,
-		PartyID:         partyID,
-		PartyName:       sale.CustomerName,
-		PartyType:       "customer",
-		Remarks:         remarks,
-	})
+	breakdown := normalizePaymentBreakdown(parsePaymentBreakdown(sale.PaymentBreakdownJSON))
+	if len(breakdown) == 0 && sale.AmountReceived > 0 {
+		breakdown = []models.PaymentBreakdownEntry{{Mode: sale.PaymentMode, Amount: sale.AmountReceived}}
+	}
+
+	entries := make([]models.FinanceTransaction, 0, len(breakdown))
+	for index, entry := range breakdown {
+		entries = append(entries, models.FinanceTransaction{
+			SourceModule:    "offline_sale",
+			SourceID:        fmt.Sprintf("%s::%d", sale.ID.String(), index),
+			TransactionDate: sale.SaleDate,
+			Direction:       "in",
+			PaymentMode:     entry.Mode,
+			Amount:          entry.Amount,
+			ReferenceID:     sale.ID.String(),
+			ReferenceLabel:  sale.BillNumber,
+			PartyID:         partyID,
+			PartyName:       sale.CustomerName,
+			PartyType:       "customer",
+			Remarks:         remarks,
+		})
+	}
+
+	return s.financeRepo.ReplaceMany("offline_sale", sale.ID.String(), entries)
+}
+
+func (s *OfflineSaleService) UpdatePaymentBreakdown(id string, breakdown []models.PaymentBreakdownEntry) error {
+	sale, err := s.repo.GetByID(id)
+	if err != nil {
+		return err
+	}
+
+	normalized := normalizePaymentBreakdown(breakdown)
+	receivedAmount := totalPaymentBreakdown(normalized)
+	if receivedAmount > sale.FinalTotal {
+		return errors.New("received amount cannot exceed total sale amount")
+	}
+
+	existingBreakdown := normalizePaymentBreakdown(parsePaymentBreakdown(sale.PaymentBreakdownJSON))
+	if len(existingBreakdown) == 0 && sale.AmountReceived > 0 {
+		existingBreakdown = []models.PaymentBreakdownEntry{{Mode: sale.PaymentMode, Amount: sale.AmountReceived}}
+	}
+
+	if s.settingsRepo != nil {
+		for _, entry := range existingBreakdown {
+			if err := s.settingsRepo.AdjustPaymentBalance(-entry.Amount, entry.Mode); err != nil {
+				return err
+			}
+		}
+		for _, entry := range normalized {
+			if err := s.settingsRepo.ApplyCollectedPayment(entry.Amount, entry.Mode); err != nil {
+				return err
+			}
+		}
+	}
+
+	sale.PaymentBreakdown = normalized
+	sale.PaymentBreakdownJSON = serializePaymentBreakdown(normalized)
+	sale.AmountReceived = receivedAmount
+	sale.PaymentMode = primaryPaymentMode(normalized, "cash")
+	sale.BalanceDue = sale.FinalTotal - receivedAmount
+	if sale.BalanceDue < 0 {
+		sale.BalanceDue = 0
+	}
+	if receivedAmount >= sale.FinalTotal && sale.FinalTotal > 0 {
+		sale.Status = "paid"
+	} else if receivedAmount > 0 {
+		sale.Status = "partial"
+	} else {
+		sale.Status = "due"
+	}
+
+	if err := s.repo.UpdatePaymentBreakdown(id, sale.PaymentMode, sale.AmountReceived, sale.BalanceDue, sale.Status, sale.PaymentBreakdownJSON); err != nil {
+		return err
+	}
+
+	return s.syncFinanceTransaction(sale)
 }

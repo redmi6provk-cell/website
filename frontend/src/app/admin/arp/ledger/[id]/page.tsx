@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { canAccessERP } from "@/lib/roles";
@@ -9,7 +9,6 @@ import {
   AlertCircle,
   ArrowLeft,
   CreditCard,
-  FilePlus2,
   FileText,
   Plus,
 } from "lucide-react";
@@ -45,6 +44,10 @@ interface InvoiceRowProgress extends InvoiceProgress {
   key: string;
 }
 
+type TransactionWithKey = Transaction & {
+  rowKey: string;
+};
+
 type BankAccount = {
   name?: string;
   balance?: number;
@@ -66,15 +69,6 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
   const [paymentModeFilter, setPaymentModeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
 
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({
-    invoice_no: "",
-    invoice_date: new Date().toISOString().slice(0, 10),
-    due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    total_amount: "",
-    status: "unpaid",
-  });
-
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Transaction | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,18 +83,7 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
     checkAuth();
   }, [checkAuth]);
 
-  useEffect(() => {
-    if (isInitialized && (!isAuthenticated || (user && !canAccessERP(user.role)))) {
-      router.push("/");
-      return;
-    }
-
-    if (isInitialized && isAuthenticated && user && canAccessERP(user.role)) {
-      fetchLedger();
-    }
-  }, [isInitialized, isAuthenticated, user, router, id]);
-
-  const fetchLedger = async () => {
+  const fetchLedger = useCallback(async () => {
     try {
       const [transRes, partiesRes, settingsRes] = await Promise.all([
         api.get(`/admin/arp/ledger/${id}`),
@@ -123,7 +106,18 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (isInitialized && (!isAuthenticated || (user && !canAccessERP(user.role)))) {
+      router.push("/");
+      return;
+    }
+
+    if (isInitialized && isAuthenticated && user && canAccessERP(user.role)) {
+      fetchLedger();
+    }
+  }, [isInitialized, isAuthenticated, user, router, fetchLedger]);
 
   useEffect(() => {
     if (paymentModeFilter !== "all" && !paymentModes.includes(paymentModeFilter)) {
@@ -138,50 +132,6 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
     }
   }, [paymentModes, paymentModeFilter, paymentForm.payment_mode]);
 
-  const handleOpenInvoice = () => {
-    const prefix = party?.type === "supplier" ? "SUP" : "INV";
-    setInvoiceForm({
-      invoice_no: `${prefix}-${Date.now()}`,
-      invoice_date: new Date().toISOString().slice(0, 10),
-      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      total_amount: "",
-      status: "unpaid",
-    });
-    setIsInvoiceModalOpen(true);
-  };
-
-  const handleCreateInvoice = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!party) return;
-
-    setIsSubmitting(true);
-    try {
-      await api.post("/admin/arp/invoices", {
-        party_id: party.party_id,
-        invoice_no: invoiceForm.invoice_no.trim(),
-        invoice_date: new Date(invoiceForm.invoice_date).toISOString(),
-        due_date: new Date(invoiceForm.due_date).toISOString(),
-        status: invoiceForm.status,
-        total_amount: parseFloat(invoiceForm.total_amount),
-      });
-
-      setIsInvoiceModalOpen(false);
-      await fetchLedger();
-      setSuccessMessage("Invoice created successfully.");
-    } catch (error: unknown) {
-      const message =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        (error as { response?: { data?: { error?: string } } }).response?.data?.error
-          ? (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to create invoice."
-          : "Failed to create invoice.";
-      alert(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const invoiceTotals = transactions.reduce<Record<string, number>>((acc, transaction) => {
     if (transaction.type === "invoice" && transaction.invoice_id) {
       acc[transaction.invoice_id] = transaction.amount;
@@ -189,12 +139,17 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
     return acc;
   }, {});
 
+  const transactionsWithKeys: TransactionWithKey[] = transactions.map((transaction, index) => ({
+    ...transaction,
+    rowKey: `${transaction.type}-${transaction.invoice_id || transaction.payment_id || transaction.ref_id}-${index}`,
+  }));
+
   const invoiceProgressByRow = (() => {
     const progressMap: Record<string, InvoiceRowProgress> = {};
     const openInvoices: Array<{ key: string; invoice_id?: string; remaining: number }> = [];
 
-    transactions.forEach((transaction, index) => {
-      const rowKey = `${transaction.type}-${transaction.invoice_id || transaction.ref_id}-${index}`;
+    transactionsWithKeys.forEach((transaction) => {
+      const rowKey = transaction.rowKey;
 
       if (transaction.type === "invoice") {
         progressMap[rowKey] = {
@@ -324,7 +279,7 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
             ? "bg-amber-50 text-amber-700"
             : "bg-zinc-100 text-zinc-700",
   }));
-  const filteredTransactions = transactions.filter((transaction) => {
+  const filteredTransactions = transactionsWithKeys.filter((transaction) => {
     const transactionDate = new Date(transaction.date);
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -408,15 +363,6 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
               </div>
               <h1 className="text-4xl font-black text-zinc-900 tracking-tighter uppercase">{party.name}</h1>
             </div>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={handleOpenInvoice}
-              variant="outline"
-              className="h-14 rounded-2xl border-green-200 px-6 font-bold uppercase text-[10px] tracking-widest text-green-700 hover:bg-green-50"
-            >
-              <FilePlus2 className="h-4 w-4 mr-2" /> Create Invoice
-            </Button>
           </div>
         </div>
 
@@ -518,14 +464,13 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
-                {filteredTransactions.map((transaction, index) => {
-                  const rowKey = `${transaction.type}-${transaction.invoice_id || transaction.ref_id}-${index}`;
-                  const progress = transaction.type === "invoice" ? invoiceProgressByRow[rowKey] : undefined;
+                {filteredTransactions.map((transaction) => {
+                  const progress = transaction.type === "invoice" ? invoiceProgressByRow[transaction.rowKey] : undefined;
                   const invoiceStatus = progress?.status || "unpaid";
                   const remainingAmount = progress?.remaining ?? transaction.amount;
 
                   return (
-                    <tr key={index} className="hover:bg-zinc-50/30 transition-all">
+                    <tr key={transaction.rowKey} className="hover:bg-zinc-50/30 transition-all">
                       <td className="px-8 py-6 font-bold text-zinc-400 text-xs">
                         {new Date(transaction.date).toLocaleDateString()}
                       </td>
@@ -598,76 +543,9 @@ export default function PartyLedgerDetail({ params }: { params: Promise<{ id: st
           {filteredTransactions.length === 0 && (
             <div className="py-20 text-center">
               <p className="text-zinc-300 font-black uppercase tracking-widest text-xs">No transactions recorded yet</p>
-              <Button
-                onClick={handleOpenInvoice}
-                className="mt-6 rounded-2xl bg-zinc-900 px-6 font-bold uppercase tracking-widest text-[10px] text-white"
-              >
-                <FilePlus2 className="h-4 w-4 mr-2" /> Add First Invoice
-              </Button>
             </div>
           )}
         </div>
-
-        <Modal isOpen={isInvoiceModalOpen} onClose={() => setIsInvoiceModalOpen(false)} title="Create Invoice">
-          <form onSubmit={handleCreateInvoice} className="space-y-6">
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Party</label>
-              <div className="h-14 bg-zinc-50 rounded-2xl flex items-center px-4 font-bold text-zinc-900 border border-zinc-100">
-                {party.name}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Invoice Number</label>
-              <Input
-                required
-                value={invoiceForm.invoice_no}
-                onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_no: e.target.value })}
-                className="h-14 rounded-2xl"
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Invoice Date</label>
-                <Input
-                  required
-                  type="date"
-                  value={invoiceForm.invoice_date}
-                  onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })}
-                  className="h-14 rounded-2xl"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Due Date</label>
-                <Input
-                  required
-                  type="date"
-                  value={invoiceForm.due_date}
-                  onChange={(e) => setInvoiceForm({ ...invoiceForm, due_date: e.target.value })}
-                  className="h-14 rounded-2xl"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Amount (INR)</label>
-              <Input
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                value={invoiceForm.total_amount}
-                onChange={(e) => setInvoiceForm({ ...invoiceForm, total_amount: e.target.value })}
-                className="h-14 rounded-2xl font-black text-lg"
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest mt-4"
-              isLoading={isSubmitting}
-            >
-              Create Invoice
-            </Button>
-          </form>
-        </Modal>
 
         <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Payment">
           <form onSubmit={handleRecordPayment} className="space-y-6">

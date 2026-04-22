@@ -26,16 +26,17 @@ type offlineSaleItemRequest struct {
 }
 
 type offlineSaleRequest struct {
-	BillNumber      string                   `json:"bill_number"`
-	SaleDate        string                   `json:"sale_date"`
-	CustomerPartyID string                   `json:"customer_party_id"`
-	CustomerName    string                   `json:"customer_name"`
-	CustomerPhone   string                   `json:"customer_phone"`
-	ShopName        string                   `json:"shop_name"`
-	PaymentMode     string                   `json:"payment_mode"`
-	Notes           string                   `json:"notes"`
-	AmountReceived  float64                  `json:"amount_received"`
-	Items           []offlineSaleItemRequest `json:"items"`
+	BillNumber       string                         `json:"bill_number"`
+	SaleDate         string                         `json:"sale_date"`
+	CustomerPartyID  string                         `json:"customer_party_id"`
+	CustomerName     string                         `json:"customer_name"`
+	CustomerPhone    string                         `json:"customer_phone"`
+	ShopName         string                         `json:"shop_name"`
+	PaymentMode      string                         `json:"payment_mode"`
+	Notes            string                         `json:"notes"`
+	AmountReceived   float64                        `json:"amount_received"`
+	Items            []offlineSaleItemRequest       `json:"items"`
+	PaymentBreakdown []models.PaymentBreakdownEntry `json:"payment_breakdown"`
 }
 
 func NewOfflineSaleHandler(service *services.OfflineSaleService) *OfflineSaleHandler {
@@ -128,6 +129,25 @@ func (h *OfflineSaleHandler) DeleteOfflineSale(c *gin.Context) {
 	response.OK(c, "Offline sale deleted successfully", nil)
 }
 
+func (h *OfflineSaleHandler) UpdateOfflineSalePaymentBreakdown(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		PaymentBreakdown []models.PaymentBreakdownEntry `json:"payment_breakdown"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, "Payment breakdown payload is invalid")
+		return
+	}
+
+	if err := h.service.UpdatePaymentBreakdown(id, req.PaymentBreakdown); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.OK(c, "Offline sale payment breakdown updated", nil)
+}
+
 func buildOfflineSaleModel(req offlineSaleRequest) (models.OfflineSale, error) {
 	saleDate, err := time.Parse("2006-01-02", req.SaleDate)
 	if err != nil {
@@ -160,15 +180,16 @@ func buildOfflineSaleModel(req offlineSaleRequest) (models.OfflineSale, error) {
 	}
 
 	return models.OfflineSale{
-		BillNumber:      req.BillNumber,
-		SaleDate:        saleDate,
-		CustomerPartyID: customerPartyID,
-		CustomerName:    req.CustomerName,
-		CustomerPhone:   req.CustomerPhone,
-		ShopName:        req.ShopName,
-		PaymentMode:     req.PaymentMode,
-		Notes:           req.Notes,
-		AmountReceived:  req.AmountReceived,
-		Items:           items,
+		BillNumber:       req.BillNumber,
+		SaleDate:         saleDate,
+		CustomerPartyID:  customerPartyID,
+		CustomerName:     req.CustomerName,
+		CustomerPhone:    req.CustomerPhone,
+		ShopName:         req.ShopName,
+		PaymentMode:      req.PaymentMode,
+		Notes:            req.Notes,
+		AmountReceived:   req.AmountReceived,
+		PaymentBreakdown: req.PaymentBreakdown,
+		Items:            items,
 	}, nil
 }

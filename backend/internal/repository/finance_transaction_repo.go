@@ -76,6 +76,26 @@ func (r *FinanceTransactionRepository) DeleteBySource(sourceModule string, sourc
 		Delete(&models.FinanceTransaction{}).Error
 }
 
+func (r *FinanceTransactionRepository) DeleteBySourcePrefix(sourceModule string, sourceID string) error {
+	return r.db.Where("source_module = ? AND (source_id = ? OR source_id LIKE ?)", sourceModule, sourceID, sourceID+"::%").
+		Delete(&models.FinanceTransaction{}).Error
+}
+
+func (r *FinanceTransactionRepository) ReplaceMany(sourceModule string, sourceID string, entries []models.FinanceTransaction) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("source_module = ? AND (source_id = ? OR source_id LIKE ?)", sourceModule, sourceID, sourceID+"::%").
+			Delete(&models.FinanceTransaction{}).Error; err != nil {
+			return err
+		}
+
+		if len(entries) == 0 {
+			return nil
+		}
+
+		return tx.Create(&entries).Error
+	})
+}
+
 func (r *FinanceTransactionRepository) GetPaymentModeTransactions(paymentMode string) ([]models.PaymentModeTransaction, error) {
 	var transactions []models.PaymentModeTransaction
 	normalizedMode := strings.TrimSpace(paymentMode)

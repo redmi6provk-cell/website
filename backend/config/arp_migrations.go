@@ -127,6 +127,7 @@ func EnsureOrderPaymentTrackingSchema() error {
 	statements := []string{
 		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS received_amount numeric(15,2) DEFAULT 0`,
 		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_collection_method varchar(120)`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_breakdown_json text DEFAULT '[]'`,
 		`UPDATE orders
 		SET received_amount = total
 		WHERE payment_mode = 'cod'
@@ -139,11 +140,47 @@ func EnsureOrderPaymentTrackingSchema() error {
 			AND status = 'confirmed'
 			AND payment_status = 'paid'
 			AND (payment_collection_method IS NULL OR TRIM(payment_collection_method) = '')`,
+		`UPDATE orders
+		SET payment_breakdown_json = CASE
+			WHEN COALESCE(received_amount, 0) > 0 THEN json_build_array(json_build_object(
+				'mode',
+				COALESCE(NULLIF(TRIM(payment_collection_method), ''), 'cash'),
+				'amount',
+				received_amount
+			))::text
+			ELSE '[]'
+		END
+		WHERE payment_breakdown_json IS NULL OR TRIM(payment_breakdown_json) = ''`,
 	}
 
 	for _, statement := range statements {
 		if err := DB.Exec(statement).Error; err != nil {
 			return fmt.Errorf("order payment tracking schema alignment failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func EnsureOfflineSalePaymentTrackingSchema() error {
+	statements := []string{
+		`ALTER TABLE offline_sales ADD COLUMN IF NOT EXISTS payment_breakdown_json text DEFAULT '[]'`,
+		`UPDATE offline_sales
+		SET payment_breakdown_json = CASE
+			WHEN COALESCE(amount_received, 0) > 0 THEN json_build_array(json_build_object(
+				'mode',
+				COALESCE(NULLIF(TRIM(payment_mode), ''), 'cash'),
+				'amount',
+				amount_received
+			))::text
+			ELSE '[]'
+		END
+		WHERE payment_breakdown_json IS NULL OR TRIM(payment_breakdown_json) = ''`,
+	}
+
+	for _, statement := range statements {
+		if err := DB.Exec(statement).Error; err != nil {
+			return fmt.Errorf("offline sale payment tracking schema alignment failed: %w", err)
 		}
 	}
 

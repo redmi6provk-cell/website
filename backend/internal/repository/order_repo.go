@@ -151,6 +151,102 @@ func (r *OrderRepository) UpdateInvoiceNumber(orderID uuid.UUID, invoiceNumber s
 		Update("invoice_number", invoiceNumber).Error
 }
 
+func (r *OrderRepository) UpdatePaymentFields(orderID uuid.UUID, paymentStatus string, receivedAmount float64, paymentCollectionMethod string) error {
+	updates := map[string]interface{}{
+		"payment_status":            paymentStatus,
+		"received_amount":           receivedAmount,
+		"payment_collection_method": paymentCollectionMethod,
+	}
+
+	return r.db.Model(&models.Order{}).
+		Where("id = ?", orderID).
+		Updates(updates).Error
+}
+
+func (r *OrderRepository) UpdatePaymentBreakdown(orderID uuid.UUID, paymentBreakdownJSON string) error {
+	return r.db.Model(&models.Order{}).
+		Where("id = ?", orderID).
+		Update("payment_breakdown_json", paymentBreakdownJSON).Error
+}
+
+func (r *OrderRepository) UpdateItems(
+	orderID uuid.UUID,
+	items []models.OrderItem,
+	subtotal float64,
+	total float64,
+	paymentStatus string,
+	receivedAmount float64,
+	paymentCollectionMethod string,
+	paymentBreakdownJSON string,
+	stockAdjustments map[uuid.UUID]int,
+	eventNote string,
+	status string,
+	changedBy *uuid.UUID,
+) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for productID, delta := range stockAdjustments {
+			if delta == 0 {
+				continue
+			}
+
+			if delta > 0 {
+				if err := tx.Model(&models.Product{}).
+					Where("id = ?", productID).
+					Update("stock", gorm.Expr("stock + ?", delta)).Error; err != nil {
+					return err
+				}
+				continue
+			}
+
+			result := tx.Model(&models.Product{}).
+				Where("id = ? AND stock >= ?", productID, -delta).
+				Update("stock", gorm.Expr("stock - ?", -delta))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return gorm.ErrRecordNotFound
+			}
+		}
+
+		for _, item := range items {
+			if err := tx.Model(&models.OrderItem{}).
+				Where("id = ? AND order_id = ?", item.ID, orderID).
+				Updates(map[string]interface{}{
+					"quantity": item.Quantity,
+					"price":    item.Price,
+				}).Error; err != nil {
+				return err
+			}
+		}
+
+		updates := map[string]interface{}{
+			"subtotal":                  subtotal,
+			"total":                     total,
+			"payment_status":            paymentStatus,
+			"received_amount":           receivedAmount,
+			"payment_collection_method": paymentCollectionMethod,
+			"payment_breakdown_json":    paymentBreakdownJSON,
+		}
+
+		if err := tx.Model(&models.Order{}).
+			Where("id = ?", orderID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+
+		event := models.OrderStatusEvent{
+			ID:        uuid.New(),
+			OrderID:   orderID,
+			Status:    status,
+			Note:      eventNote,
+			ChangedBy: changedBy,
+		}
+
+		return tx.Create(&event).Error
+	})
+}
+
 func (r *OrderRepository) HasInvoiceNumberConflict(orderID uuid.UUID, invoiceNumber string) (bool, error) {
 	var count int64
 	query := r.db.Model(&models.Order{}).

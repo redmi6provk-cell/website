@@ -78,7 +78,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { title: "Expenses", icon: Landmark, link: "/admin/expenses", allowed: canAccessAdmin(user?.role) },
         { title: "Products", icon: Package, link: "/admin/products", allowed: canAccessAdmin(user?.role) },
         { title: "Upload", icon: UploadCloud, link: "/admin/upload", allowed: canAccessAdmin(user?.role) },
-        { title: "Transactions", icon: BarChart3, link: "/admin/arp", allowed: canAccessERP(user?.role) },
+        { title: "Cash and BANK", icon: BarChart3, link: "/admin/arp", allowed: canAccessERP(user?.role) },
         { title: "Parties", icon: Users, link: "/admin/parties", allowed: canAccessERP(user?.role) },
         { title: "Categories", icon: Layers, link: "/admin/categories", allowed: canAccessAdmin(user?.role) },
         { title: "Brands", icon: Tag, link: "/admin/brands", allowed: canAccessAdmin(user?.role) },
