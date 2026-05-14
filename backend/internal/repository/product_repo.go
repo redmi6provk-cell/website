@@ -44,12 +44,40 @@ func (r *ProductRepository) GetAll(category, brand, sort string, minPrice, maxPr
 	query.Count(&total)
 
 	switch sort {
+	case "stock_desc":
+		query = query.Order("stock desc")
+	case "stock_asc":
+		query = query.Order("stock asc")
 	case "price_asc":
 		query = query.Order("price asc")
 	case "price_desc":
 		query = query.Order("price desc")
 	case "newest":
 		query = query.Order("created_at desc")
+	case "discount_desc":
+		query = query.Order(`
+			CASE
+				WHEN price > 0 THEN
+					GREATEST(
+						COALESCE(discount, 0)::double precision,
+						COALESCE((
+							SELECT MAX(
+								CASE
+									WHEN UPPER(COALESCE(discount_slab->>'discount_type', '')) = 'PERCENT' THEN
+										price::double precision * COALESCE(NULLIF(discount_slab->>'discount_value', '')::double precision, 0) / 100
+									ELSE
+										COALESCE(NULLIF(discount_slab->>'discount_value', '')::double precision, 0)
+								END
+							)
+							FROM jsonb_array_elements(COALESCE(quantity_discounts, '[]'::jsonb)) AS discount_slab
+						), 0)::double precision
+					) / price::double precision
+				ELSE 0
+			END DESC,
+			created_at DESC
+		`)
+	default:
+		query = query.Order("stock desc")
 	}
 
 	if limit > 0 {

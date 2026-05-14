@@ -12,12 +12,21 @@ function clampQuantityToStock(product: Product, quantity: number) {
 }
 
 function getSyncableItems(items: CartItem[]) {
-  return items
-    .filter((item) => item?.product?.id && uuidPattern.test(item.product.id) && Number(item.quantity) > 0)
-    .map((item) => ({
-      product_id: item.product.id,
-      quantity: Math.max(1, Math.floor(Number(item.quantity))),
-    }));
+  const mergedItems = new Map<string, number>();
+
+  for (const item of items) {
+    if (!item?.product?.id || !uuidPattern.test(item.product.id) || Number(item.quantity) <= 0) {
+      continue;
+    }
+
+    const quantity = Math.max(1, Math.floor(Number(item.quantity)));
+    mergedItems.set(item.product.id, (mergedItems.get(item.product.id) || 0) + quantity);
+  }
+
+  return Array.from(mergedItems, ([product_id, quantity]) => ({
+    product_id,
+    quantity,
+  }));
 }
 
 async function syncServerCart(ownerId: string, items: CartItem[]) {

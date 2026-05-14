@@ -440,7 +440,7 @@ export default function AdminOfflineSellPage() {
         <div className="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => router.push("/admin")} className="rounded-full"><ChevronLeft className="h-5 w-5" /></Button>
-            <div><h1 className="text-2xl font-black tracking-tight text-zinc-900 sm:text-3xl md:text-4xl">OFFLINE Sale</h1><p className="mt-1 text-sm text-zinc-500 md:mt-2 md:text-base">Walk-in billing, manual sale entry, stock reduction aur invoice print yahin se manage karo.</p></div>
+            <div><h1 className="text-2xl font-black tracking-tight text-zinc-900 sm:text-3xl md:text-4xl">Sale</h1><p className="mt-1 text-sm text-zinc-500 md:mt-2 md:text-base">Walk-in billing, manual sale entry, stock reduction aur invoice print yahin se manage karo.</p></div>
           </div>
           <Button type="button" variant="outline" className="h-12 rounded-2xl px-6" onClick={() => router.push("/admin/offline-sell/history")}>
             Open Sales History

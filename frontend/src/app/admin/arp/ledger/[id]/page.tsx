@@ -22,6 +22,7 @@ interface Transaction {
   type: string;
   ref_id: string;
   invoice_id?: string;
+  payment_id?: string;
   amount: number;
   balance: number;
   payment_mode?: string;

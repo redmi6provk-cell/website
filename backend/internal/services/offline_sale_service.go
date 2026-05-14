@@ -34,7 +34,7 @@ func (s *OfflineSaleService) Create(sale *models.OfflineSale) error {
 		}
 		sale.BillNumber = invoiceNumber
 	}
-	if err := s.validate(sale, false); err != nil {
+	if err := s.validate(sale); err != nil {
 		return err
 	}
 	if err := s.repo.Create(sale); err != nil {
@@ -51,7 +51,7 @@ func (s *OfflineSaleService) Create(sale *models.OfflineSale) error {
 }
 
 func (s *OfflineSaleService) Update(sale *models.OfflineSale) error {
-	if err := s.validate(sale, false); err != nil {
+	if err := s.validate(sale); err != nil {
 		return err
 	}
 	existing, err := s.repo.GetByID(sale.ID.String())
@@ -124,7 +124,7 @@ func (s *OfflineSaleService) SyncFinanceTransactions() error {
 	return nil
 }
 
-func (s *OfflineSaleService) validate(sale *models.OfflineSale, generateBill bool) error {
+func (s *OfflineSaleService) validate(sale *models.OfflineSale) error {
 	sale.CustomerName = strings.TrimSpace(sale.CustomerName)
 	sale.CustomerPhone = strings.TrimSpace(sale.CustomerPhone)
 	sale.ShopName = strings.TrimSpace(sale.ShopName)

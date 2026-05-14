@@ -29,7 +29,7 @@ function ProductsPageContent() {
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
   const page = parseInt(searchParams.get("page") || "1");
-  const sort = searchParams.get("sort") || "";
+  const sort = searchParams.get("sort") || "stock_desc";
   const search = searchParams.get("search") || "";
   const view = searchParams.get("view") || "";
   const showCategoriesOnly = view === "categories";
@@ -132,63 +132,62 @@ function ProductsPageContent() {
 
   const totalPages = Math.ceil(total / PRODUCTS_PER_PAGE);
   const sortLabel =
-    sort === "price_asc"
-      ? "Price: Low to High"
-      : sort === "price_desc"
-        ? "Price: High to Low"
-        : "Latest";
+    sort === "stock_desc"
+      ? "Stock: High to Low"
+      : sort === "stock_asc"
+        ? "Stock: Low to High"
+        : sort === "price_asc"
+          ? "Price: Low to High"
+          : sort === "price_desc"
+            ? "Price: High to Low"
+            : sort === "discount_desc"
+              ? "Highest Discount"
+              : "Latest";
   const categoryCountLabel = isCategoriesLoading ? "Loading categories..." : `${categories.length} categories available`;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7f7f3_0%,#ffffff_26%,#ffffff_100%)] py-5 md:py-8">
+    <div className="min-h-screen bg-white py-8 md:py-12">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-6 overflow-hidden rounded-[28px] border border-zinc-100 bg-white shadow-[0_30px_80px_-48px_rgba(0,0,0,0.25)] md:mb-8 md:rounded-[32px]">
-          <div className="grid gap-5 px-4 py-5 sm:px-6 md:grid-cols-[1.6fr_0.9fr] md:px-8 md:py-8">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-green-700">
-                <Sparkles className="h-3.5 w-3.5" />
-                Fresh picks
-              </div>
-              <h1 className="max-w-2xl text-2xl font-black tracking-tight text-zinc-950 sm:text-3xl md:text-4xl">
-                {selectedCategoryName
-                  ? `${selectedCategoryName} essentials`
-                  : search
-                    ? `Search results for "${search}"`
-                    : "All products for your store "}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 md:text-base">
-                {search
-                  ? "Search karke matching products ko jaldi find karo aur direct cart tak jao."
-                  : "Jo products backend mein hain, wahi yahan show honge."}
-              </p>
+        <div className="mb-10 flex flex-col gap-6 border-b border-zinc-100 pb-8 md:mb-14 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200/60 bg-zinc-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">
+              <Sparkles className="h-3 w-3" />
+              Catalogue
             </div>
+            <h1 className="max-w-2xl text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl md:text-5xl">
+              {selectedCategoryName
+                ? selectedCategoryName
+                : search
+                  ? `Search: "${search}"`
+                  : "All Products"}
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-500 md:text-base">
+              {search
+                ? "Here are the matching results for your search. Use filters to narrow them down."
+                : selectedCategoryName
+                ? `Explore everything we have in the ${selectedCategoryName} category.`
+                : "Browse our entire collection. Use the sidebar filters to find exactly what you need."}
+            </p>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
-              <div className="rounded-2xl bg-zinc-50 p-4 md:rounded-3xl">
-                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Items</div>
-                <div className="mt-2 text-2xl font-black text-zinc-950">
-                  {search ? visibleProducts.length : total}
-                </div>
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-4 md:rounded-3xl">
-                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Category</div>
-                <div className="mt-2 text-sm font-bold text-zinc-950">
-                  {showCategoriesOnly ? "Browse all" : selectedCategoryName || "All"}
-                </div>
-              </div>
-              <div className="col-span-2 rounded-2xl bg-zinc-50 p-4 md:rounded-3xl">
-                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">
-                  {showCategoriesOnly ? "Category view" : "Price filter"}
-                </div>
-                <div className="mt-2 text-sm font-bold text-zinc-950">
-                  {showCategoriesOnly
-                    ? categoryCountLabel
-                    : minPrice || maxPrice
-                      ? `Rs. ${minPrice || "0"} to Rs. ${maxPrice || "Any"}`
-                      : "No price filter"}
-                </div>
-              </div>
+          <div className="flex flex-wrap items-center gap-8 md:pb-2">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Total Items</div>
+              <div className="mt-1 text-2xl font-black text-zinc-900">{search ? visibleProducts.length : total}</div>
             </div>
+            {showCategoriesOnly ? (
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Categories</div>
+                <div className="mt-1 text-2xl font-black text-zinc-900">{categories.length}</div>
+              </div>
+            ) : (minPrice || maxPrice) ? (
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Price Range</div>
+                <div className="mt-1 text-lg font-bold text-zinc-900">
+                  {`Rs. ${minPrice || "0"} - ${maxPrice || "Any"}`}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -253,14 +252,17 @@ function ProductsPageContent() {
                 </div>
                 <div className="space-y-3">
                   {[
-                    { value: "", label: "Latest" },
+                    { value: "stock_desc", label: "Stock: High to Low" },
+                    { value: "stock_asc", label: "Stock: Low to High" },
+                    { value: "newest", label: "Latest" },
                     { value: "price_asc", label: "Price: Low to High" },
                     { value: "price_desc", label: "Price: High to Low" },
+                    { value: "discount_desc", label: "Highest Discount" },
                   ].map((option) => (
                     <button
                       key={option.value || "latest"}
                       onClick={() => {
-                        updateFilters({ sort: option.value || null });
+                        updateFilters({ sort: option.value });
                         setIsSortOpen(false);
                       }}
                       className={`block w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
@@ -304,9 +306,12 @@ function ProductsPageContent() {
                     onChange={(e) => updateFilters({ sort: e.target.value })}
                     className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
-                    <option value="">Sort by: Latest</option>
+                    <option value="stock_desc">Stock: High to Low</option>
+                    <option value="stock_asc">Stock: Low to High</option>
+                    <option value="newest">Sort by: Latest</option>
                     <option value="price_asc">Price: Low to High</option>
                     <option value="price_desc">Price: High to Low</option>
+                    <option value="discount_desc">Highest Discount</option>
                   </select>
                 </div>
               </div>
@@ -353,8 +358,12 @@ function ProductsPageContent() {
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-6 rounded-[28px] border-2 border-dashed border-zinc-200 px-6 py-12 text-center text-sm text-zinc-500">
-                    Categories abhi available nahi hain.
+                  <div className="mt-6 flex flex-col items-center justify-center rounded-[28px] bg-zinc-50/50 py-16 text-center">
+                    <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white border border-zinc-100 shadow-sm transition-transform duration-500 hover:scale-105">
+                      <Layers className="h-8 w-8 text-zinc-300" strokeWidth={1.2} />
+                    </div>
+                    <h3 className="text-lg font-black tracking-tight text-zinc-900">No categories found</h3>
+                    <p className="mt-2 text-sm text-zinc-500">Categories abhi available nahi hain.</p>
                   </div>
                 )}
               </div>
@@ -397,18 +406,26 @@ function ProductsPageContent() {
                 )}
               </>
             ) : (
-              <div className="flex h-64 flex-col items-center justify-center space-y-4 rounded-[32px] border-2 border-dashed border-zinc-200 bg-white py-12 text-center">
-                <p className="text-lg font-semibold text-zinc-800">
-                  {search ? `No products found for "${search}".` : "No products match your filters."}
-                </p>
-                <p className="max-w-md text-sm text-zinc-500">
-                  {search
-                    ? "Spelling change karke dekho, ya broader search try karo. Category aur price filters bhi clear kar sakte ho."
-                    : "Category ya price range thoda reset karke dekho, ya phir all products par wapas aa jao."}
-                </p>
-                <Button variant="outline" size="sm" onClick={() => router.push("/products")}>
-                  {search ? "Clear search and filters" : "Clear all filters"}
-                </Button>
+              <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-[32px] bg-white px-4 text-center">
+                <div className="mx-auto flex max-w-md flex-col items-center">
+                  <div className="mb-6 flex h-28 w-28 items-center justify-center rounded-[2.5rem] bg-zinc-50 border border-zinc-100 transition-transform duration-500 hover:scale-105">
+                    <SearchIcon className="h-10 w-10 text-zinc-300" strokeWidth={1.2} />
+                  </div>
+                  <h2 className="text-2xl font-black tracking-tight text-zinc-950 sm:text-3xl">
+                    {search ? `No products found for "${search}"` : "No products match your filters"}
+                  </h2>
+                  <p className="mt-4 text-sm leading-loose text-zinc-500">
+                    {search
+                      ? "Spelling change karke dekho, ya broader search try karo. Category aur price filters bhi clear kar sakte ho."
+                      : "Category ya price range thoda reset karke dekho, ya phir sabhi products par wapas aa jao."}
+                  </p>
+                  <button
+                    onClick={() => router.push("/products")}
+                    className="group mt-8 inline-flex items-center rounded-full bg-zinc-950 px-8 py-3.5 text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all hover:-translate-y-1 hover:bg-zinc-800 hover:shadow-xl hover:shadow-zinc-900/20"
+                  >
+                    {search ? "Clear search and filters" : "Clear all filters"}
+                  </button>
+                </div>
               </div>
             )}
           </div>

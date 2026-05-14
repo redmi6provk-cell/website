@@ -51,23 +51,21 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="relative min-h-[70vh] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(187,247,208,0.5),_transparent_45%),linear-gradient(180deg,_#fffef8_0%,_#f6f7f2_100%)]">
-        <div className="absolute inset-x-0 top-0 h-40 bg-[linear-gradient(90deg,rgba(22,101,52,0.08),rgba(245,158,11,0.08),rgba(22,101,52,0.08))]" />
-        <div className="container relative mx-auto flex min-h-[70vh] flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8">
-          <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
-              <ShoppingBag className="h-8 w-8" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tight text-zinc-900">Cart abhi khali hai</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-zinc-600 sm:text-base">
-              Products add karo aur bulk pricing, minimum quantity aur delivery savings yahin se manage karo.
-            </p>
-            <Link href="/products" className="mt-8 inline-flex">
-              <Button size="lg" className="rounded-2xl px-8">
-                Start Shopping
-              </Button>
-            </Link>
+      <div className="flex min-h-[80vh] flex-col items-center justify-center bg-white px-4 text-center">
+        <div className="mx-auto flex max-w-md flex-col items-center">
+          <div className="mb-8 flex h-32 w-32 items-center justify-center rounded-[2.5rem] bg-zinc-50 border border-zinc-100 transition-transform duration-500 hover:scale-105">
+            <ShoppingBag className="h-10 w-10 text-zinc-300" strokeWidth={1.2} />
           </div>
+          <h1 className="text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">Cart abhi khali hai</h1>
+          <p className="mt-5 text-sm leading-loose text-zinc-500">
+            Products add karo aur bulk pricing, minimum quantity aur delivery savings yahin se manage karo.
+          </p>
+          <Link href="/products" className="mt-10">
+            <button className="group inline-flex items-center rounded-full bg-zinc-950 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all hover:-translate-y-1 hover:bg-zinc-800 hover:shadow-xl hover:shadow-zinc-900/20">
+              Start Shopping
+              <ArrowRight className="ml-3 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </button>
+          </Link>
         </div>
       </div>
     );

@@ -189,7 +189,7 @@ export default function PartiesPage() {
         getContactValue(party, "phone"),
         getContactValue(party, "email"),
       ]
-        .filter(Boolean)
+        .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [parties, searchTerm]);
