@@ -35,16 +35,16 @@ func EnsureARPSchema() error {
 		`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_processed_by_fkey`,
 		fmt.Sprintf(`
 			UPDATE invoices
-			SET created_by = '%s'
+			SET created_by = '%s'::uuid
 			WHERE created_by IS NULL
-				OR created_by = '00000000-0000-0000-0000-000000000000'
+				OR created_by = '00000000-0000-0000-0000-000000000000'::uuid
 				OR NOT EXISTS (SELECT 1 FROM users WHERE users.id = invoices.created_by)
 		`, fallback.ID),
 		fmt.Sprintf(`
 			UPDATE payments
-			SET processed_by = '%s'
+			SET processed_by = '%s'::uuid
 			WHERE processed_by IS NULL
-				OR processed_by = '00000000-0000-0000-0000-000000000000'
+				OR processed_by = '00000000-0000-0000-0000-000000000000'::uuid
 				OR NOT EXISTS (SELECT 1 FROM users WHERE users.id = payments.processed_by)
 		`, fallback.ID),
 		`ALTER TABLE invoices ADD CONSTRAINT invoices_created_by_fkey
