@@ -17,30 +17,30 @@ import (
 func main() {
 	config.LoadEnv()
 	config.ConnectDB()
-	log.Println("Automatic database schema changes are disabled; skipping auto-migrate and cleanup")
+	log.Println("Running optional schema alignment (non-fatal on fresh databases)...")
 	if err := config.EnsureProductImageSchema(); err != nil {
-		log.Fatalf("Failed to align product image schema: %v", err)
+		log.Printf("Warning: product image schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureProductActiveSchema(); err != nil {
-		log.Fatalf("Failed to align product active schema: %v", err)
+		log.Printf("Warning: product active schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureARPSchema(); err != nil {
-		log.Fatalf("Failed to align ARP schema: %v", err)
+		log.Printf("Warning: ARP schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureOrderInvoiceNumberSchema(); err != nil {
-		log.Fatalf("Failed to align order invoice number schema: %v", err)
+		log.Printf("Warning: order invoice number schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureOrderPaymentTrackingSchema(); err != nil {
-		log.Fatalf("Failed to align order payment tracking schema: %v", err)
+		log.Printf("Warning: order payment tracking schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureOfflineSalePaymentTrackingSchema(); err != nil {
-		log.Fatalf("Failed to align offline sale payment tracking schema: %v", err)
+		log.Printf("Warning: offline sale payment tracking schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureSalesInvoiceSequenceSchema(); err != nil {
-		log.Fatalf("Failed to align sales invoice sequence schema: %v", err)
+		log.Printf("Warning: sales invoice sequence schema alignment skipped: %v", err)
 	}
 	if err := config.EnsureOfflineSalePartySchema(); err != nil {
-		log.Fatalf("Failed to align offline sale party schema: %v", err)
+		log.Printf("Warning: offline sale party schema alignment skipped: %v", err)
 	}
 
 	// Initialize Repositories

@@ -33,7 +33,7 @@ type Invoice struct {
 	DueDate     time.Time     `gorm:"type:date;not null" json:"due_date"`
 	Status      string        `gorm:"type:varchar(20);not null" json:"status"` // draft, unpaid, partially_paid, paid, overdue, cancelled
 	TotalAmount float64       `gorm:"type:decimal(15,2);not null;default:0.00" json:"total_amount"`
-	CreatedBy   uuid.UUID     `json:"created_by"`
+	CreatedBy   uuid.UUID     `gorm:"type:uuid" json:"created_by"`
 	CreatedAt   time.Time     `json:"created_at"`
 	Items       []InvoiceItem `gorm:"foreignKey:InvoiceID" json:"items,omitempty"`
 	Party       *Party        `gorm:"foreignKey:PartyID" json:"party,omitempty"`
@@ -56,7 +56,7 @@ type Payment struct {
 	Amount      float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
 	PaymentMode string    `gorm:"type:varchar(20);not null" json:"payment_mode"` // cash, bank_transfer, cheque, upi, credit_note
 	Remarks     string    `json:"remarks"`
-	ProcessedBy uuid.UUID `json:"processed_by"`
+	ProcessedBy uuid.UUID `gorm:"type:uuid" json:"processed_by"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
