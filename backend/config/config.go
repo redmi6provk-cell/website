@@ -27,7 +27,7 @@ func ConnectDB() {
 	}
 
 	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrate: true,
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
