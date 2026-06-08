@@ -724,7 +724,7 @@ export default function ProductTransactionsPage({ params }: { params: Promise<{ 
       </Modal>
       <SuccessPopup
         message={successMessage || ""}
-        isVisible={Boolean(successMessage)}
+        isOpen={Boolean(successMessage)}
         onClose={() => setSuccessMessage(null)}
       />
     </div>

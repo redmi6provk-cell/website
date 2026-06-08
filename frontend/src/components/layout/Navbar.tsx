@@ -83,7 +83,7 @@ export default function Navbar() {
             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-900 text-[11px] font-semibold tracking-[0.32em]">
               FM
             </span>
-            <span className="text-base font-semibold tracking-[0.18em] uppercase">FMCG Store</span>
+            <span className="text-base font-semibold tracking-[0.18em] uppercase">Sindhi smart Store</span>
           </Link>
 
           <nav className="hidden items-center gap-7 lg:flex">

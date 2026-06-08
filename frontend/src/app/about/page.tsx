@@ -26,13 +26,13 @@ export default function AboutPage() {
       <section className="container mx-auto px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-4xl text-center">
           <div className="inline-flex rounded-full border border-green-200 bg-white px-4 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-green-700">
-            About FMCG Store
+            About Sindhi smart Store
           </div>
           <h1 className="mt-6 text-4xl font-black tracking-tight text-zinc-900 sm:text-5xl">
             Everyday shopping ko simple, fast aur reliable banana hi goal hai.
           </h1>
           <p className="mt-6 text-lg leading-8 text-zinc-600">
-            FMCG Store ek clean digital shopping experience build kar raha hai jahan users essentials
+            Sindhi smart Store ek clean digital shopping experience build kar raha hai jahan users essentials
             quickly browse karke apna cart manage kar saken aur bina confusion ke checkout tak pahunch
             saken.
           </p>

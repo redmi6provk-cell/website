@@ -8,9 +8,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 const slides = [
   {
     id: 1,
-    title: "Daily essentials with a calmer shopping flow",
+    title: "Jhulelal: Your one-stop shop for everyday essentials",
     subtitle: "Groceries, household staples, and repeat buys arranged for quick scanning and faster ordering.",
-    image: "/images/2.png",
+    image: "/images/jhulelal.jpg",
     accent: "Fresh stock",
   },
   {
@@ -22,9 +22,9 @@ const slides = [
   },
   {
     id: 3,
-    title: "Personal care and home care, kept simple",
+    title: "Get all brand products in one place",
     subtitle: "A focused storefront for recurring household purchases, with pricing and availability kept easy to read.",
-    image: "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=1000",
+    image: "/images/brands.jpg",
     accent: "Everyday use",
   },
 ];
@@ -104,13 +104,21 @@ export default function Banner() {
           </div>
 
           <div className="relative">
-            <div className="relative aspect-[6/5] overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-zinc-100 sm:aspect-[4/3] sm:rounded-[2rem]">
+            <div className={`relative aspect-[6/5] overflow-hidden rounded-[1.75rem] border border-zinc-200 transition-colors duration-500 sm:aspect-[4/3] sm:rounded-[2rem] ${
+              slides[current].image.includes("jhulelal") || slides[current].image.includes("brands")
+                ? "bg-[#0c0c0c]"
+                : "bg-zinc-100"
+            }`}>
               <Image
                 src={slides[current].image}
                 alt={slides[current].title}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 42vw"
-                className="object-cover transition-opacity duration-700"
+                className={`${
+                  slides[current].image.includes("jhulelal") || slides[current].image.includes("brands")
+                    ? "object-contain p-2"
+                    : "object-cover"
+                } transition-all duration-700`}
                 priority
               />
             </div>
