@@ -26,7 +26,9 @@ func ConnectDB() {
 		log.Fatal("DATABASE_URL is not set in environment")
 	}
 
-	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrate: true,
+	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
