@@ -449,7 +449,7 @@ func (r *ARPRepository) GetLedger() ([]models.PartyLedger, error) {
 			pa.type AS party_type,
 			COALESCE(SUM(p.amount), 0) AS amount
 		FROM payments AS p
-		JOIN invoices AS i ON i.invoice_id = p.invoice_id
+		JOIN invoices AS i ON i.invoice_id::text = p.invoice_id::text
 		JOIN parties AS pa ON pa.party_id::text = i.party_id::text
 		LEFT JOIN party_contacts AS pc
 			ON pc.party_id = pa.party_id
@@ -610,7 +610,7 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			p.payment_mode AS payment_mode,
 			COALESCE(NULLIF(TRIM(p.remarks), ''), 'Invoice payment received') AS remarks
 		FROM payments AS p
-		JOIN invoices AS i ON i.invoice_id = p.invoice_id
+		JOIN invoices AS i ON i.invoice_id::text = p.invoice_id::text
 		WHERE i.party_id::text = ?
 	`, parsedPartyID.String()).Scan(&paymentRows).Error; err != nil {
 		return nil, err
@@ -762,7 +762,7 @@ func (r *ARPRepository) GetPaymentModeTransactions(paymentMode string) ([]models
 			'arp_payment' AS source_module,
 			'in' AS direction
 		`).
-		Joins("JOIN invoices AS i ON i.invoice_id = p.invoice_id").
+		Joins("JOIN invoices AS i ON i.invoice_id::text = p.invoice_id::text").
 		Joins("JOIN parties AS pa ON pa.party_id::text = i.party_id::text").
 		Order("p.created_at DESC")
 
