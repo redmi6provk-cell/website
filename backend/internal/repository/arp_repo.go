@@ -396,7 +396,7 @@ func (r *ARPRepository) GetLedger() ([]models.PartyLedger, error) {
 		FROM offline_sales AS os
 		JOIN parties AS pa
 			ON (
-				pa.party_id = os.customer_party_id
+				pa.party_id::text = os.customer_party_id::text
 				OR (
 					os.customer_party_id IS NULL
 					AND pa.type = 'customer'
@@ -641,8 +641,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 				'' AS payment_mode,
 				COALESCE(NULLIF(TRIM(notes), ''), 'Purchase bill created') AS remarks
 			FROM purchases
-			WHERE supplier_party_id = ?
-		`, parsedPartyID).Scan(&purchaseRows).Error; err != nil {
+			WHERE supplier_party_id::text = ?
+		`, parsedPartyID.String()).Scan(&purchaseRows).Error; err != nil {
 			return nil, err
 		}
 		for _, row := range purchaseRows {
