@@ -370,7 +370,7 @@ func (r *ARPRepository) GetLedger() ([]models.PartyLedger, error) {
 			pa.type AS party_type,
 			COALESCE(SUM(i.total_amount), 0) AS amount
 		FROM invoices AS i
-		JOIN parties AS pa ON pa.party_id = i.party_id
+		JOIN parties AS pa ON pa.party_id::text = i.party_id::text
 		LEFT JOIN party_contacts AS pc
 			ON pc.party_id = pa.party_id
 			AND pc.contact_type = 'phone'
@@ -450,7 +450,7 @@ func (r *ARPRepository) GetLedger() ([]models.PartyLedger, error) {
 			COALESCE(SUM(p.amount), 0) AS amount
 		FROM payments AS p
 		JOIN invoices AS i ON i.invoice_id = p.invoice_id
-		JOIN parties AS pa ON pa.party_id = i.party_id
+		JOIN parties AS pa ON pa.party_id::text = i.party_id::text
 		LEFT JOIN party_contacts AS pc
 			ON pc.party_id = pa.party_id
 			AND pc.contact_type = 'phone'
@@ -582,8 +582,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			'' AS payment_mode,
 			'Invoice Generated' AS remarks
 		FROM invoices
-		WHERE party_id = ?
-	`, parsedPartyID).Scan(&invoiceRows).Error; err != nil {
+		WHERE party_id::text = ?
+	`, parsedPartyID.String()).Scan(&invoiceRows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range invoiceRows {
@@ -611,8 +611,8 @@ func (r *ARPRepository) GetDetailedLedger(partyID string) ([]models.Transaction,
 			COALESCE(NULLIF(TRIM(p.remarks), ''), 'Invoice payment received') AS remarks
 		FROM payments AS p
 		JOIN invoices AS i ON i.invoice_id = p.invoice_id
-		WHERE i.party_id = ?
-	`, parsedPartyID).Scan(&paymentRows).Error; err != nil {
+		WHERE i.party_id::text = ?
+	`, parsedPartyID.String()).Scan(&paymentRows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range paymentRows {
@@ -763,7 +763,7 @@ func (r *ARPRepository) GetPaymentModeTransactions(paymentMode string) ([]models
 			'in' AS direction
 		`).
 		Joins("JOIN invoices AS i ON i.invoice_id = p.invoice_id").
-		Joins("JOIN parties AS pa ON pa.party_id = i.party_id").
+		Joins("JOIN parties AS pa ON pa.party_id::text = i.party_id::text").
 		Order("p.created_at DESC")
 
 	if normalizedMode != "" && !strings.EqualFold(normalizedMode, "all") {
